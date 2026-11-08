@@ -20,9 +20,9 @@ const list = (criteria) =>
 
 const hasModels = (models) => Object.keys(models).length > 0;
 const hasEfforts = (efforts) => Object.keys(efforts).length > 0;
-const hasProfiles = (profiles) => Object.keys(profiles).length > 0;
+const hasToolsets = (toolsets) => Object.keys(toolsets).length > 0;
 
-export function jevQuestions(models = {}, efforts = {}, profiles = {}) {
+export function jevQuestions(models = {}, efforts = {}, toolsets = {}) {
   const questions = {
     placement: {
       type: "choice",
@@ -50,30 +50,30 @@ export function jevQuestions(models = {}, efforts = {}, profiles = {}) {
       criteria: efforts,
     };
   }
-  if (hasProfiles(profiles)) {
-    questions.profile_choice = {
+  if (hasToolsets(toolsets)) {
+    questions.toolset_choice = {
       type: "choice",
-      instructions: "Given `query`, which tool profile does the latest prompt need if it runs apart from this conversation?",
-      criteria: profiles,
+      instructions: "Given `query`, which tool toolset does the latest prompt need if it runs apart from this conversation?",
+      criteria: toolsets,
     };
   }
   return questions;
 }
 
-export function classifierPrompt({ text, models = {}, efforts = {}, profiles = {} }) {
+export function classifierPrompt({ text, models = {}, efforts = {}, toolsets = {} }) {
   const modelSection = hasModels(models)
     ? ["model: which model should handle it", list(models), ""]
     : [];
   const effortSection = hasEfforts(efforts)
     ? ["effort: how much reasoning it needs", list(efforts), ""]
     : [];
-  const profileSection = hasProfiles(profiles)
-    ? ["profile: which tools it needs if it runs apart from this conversation", list(profiles), ""]
+  const toolsetSection = hasToolsets(toolsets)
+    ? ["toolset: which tools it needs if it runs apart from this conversation", list(toolsets), ""]
     : [];
   const fields = ['"placement":"..."', '"agent":"..."'];
   if (hasModels(models)) fields.push('"model":"..."');
   if (hasEfforts(efforts)) fields.push('"effort":"..."');
-  if (hasProfiles(profiles)) fields.push('"profile":"..."');
+  if (hasToolsets(toolsets)) fields.push('"toolset":"..."');
   const reply = `{${fields.join(",")},"title":"...","confidence":0.0-1.0}`;
   return [
     "Classify the latest user prompt in this conversation excerpt.",
@@ -86,7 +86,7 @@ export function classifierPrompt({ text, models = {}, efforts = {}, profiles = {
     "",
     ...modelSection,
     ...effortSection,
-    ...profileSection,
+    ...toolsetSection,
     "title: a 3-5 word label for the task, as a short imperative phrase",
     "",
     `Reply with only JSON: ${reply}`,
@@ -96,24 +96,24 @@ export function classifierPrompt({ text, models = {}, efforts = {}, profiles = {
   ].join("\n");
 }
 
-export function toVerdict({ placement, model, effort, profile, agent, title, confidence }, models = {}, efforts = {}, profiles = {}) {
+export function toVerdict({ placement, model, effort, toolset, agent, title, confidence }, models = {}, efforts = {}, toolsets = {}) {
   if (!PLACEMENTS.includes(placement)) throw new Error(`bad placement: ${placement}`);
   if (hasModels(models) && !Object.hasOwn(models, model)) throw new Error(`bad model: ${model}`);
   if (hasEfforts(efforts) && !Object.hasOwn(efforts, effort)) throw new Error(`bad effort: ${effort}`);
-  if (hasProfiles(profiles) && !Object.hasOwn(profiles, profile)) throw new Error(`bad profile: ${profile}`);
+  if (hasToolsets(toolsets) && !Object.hasOwn(toolsets, toolset)) throw new Error(`bad toolset: ${toolset}`);
   return {
     placement,
     model: hasModels(models) ? model : null,
     effort: hasEfforts(efforts) ? effort : null,
-    ...(hasProfiles(profiles) && { profile }),
+    ...(hasToolsets(toolsets) && { toolset }),
     ...(Object.hasOwn(SUBAGENT_TYPES, agent) && { agent }),
     ...(typeof title === "string" && title.trim() && { title: title.trim() }),
     confidence: typeof confidence === "number" ? confidence : null,
   };
 }
 
-export function parseVerdict(text, models = {}, efforts = {}, profiles = {}) {
+export function parseVerdict(text, models = {}, efforts = {}, toolsets = {}) {
   const match = /\{[\s\S]*\}/.exec(text);
   if (!match) throw new Error("no JSON in reply");
-  return toVerdict(JSON.parse(match[0]), models, efforts, profiles);
+  return toVerdict(JSON.parse(match[0]), models, efforts, toolsets);
 }

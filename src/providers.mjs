@@ -26,7 +26,7 @@ const FACTORIES = {
         options: { temperature: 0.2, num_predict: cfg.numPredict ?? 4096 },
       },
     });
-    return parseVerdict(json.message?.content ?? "", input.models, input.efforts, input.profiles);
+    return parseVerdict(json.message?.content ?? "", input.models, input.efforts, input.toolsets);
   },
 
   "openai-compat": (cfg, ctx) => async (input) => {
@@ -52,7 +52,7 @@ const FACTORIES = {
         reasoning_effort: "none",
       },
     });
-    return parseVerdict(json.choices?.[0]?.message?.content ?? "", input.models, input.efforts, input.profiles);
+    return parseVerdict(json.choices?.[0]?.message?.content ?? "", input.models, input.efforts, input.toolsets);
   },
 
   jev: (cfg, ctx) => async (input) => {
@@ -78,20 +78,20 @@ const FACTORIES = {
         const json = await request(ctx.fetch, url, {
           timeoutMs: cfg.timeoutMs,
           headers: { Authorization: `Bearer ${key}` },
-          body: { state: { query: input.text }, model, questions: jevQuestions(input.models, input.efforts, input.profiles) },
+          body: { state: { query: input.text }, model, questions: jevQuestions(input.models, input.efforts, input.toolsets) },
         });
         return toVerdict(
           {
             placement: json.answers?.placement?.choice,
             model: json.answers?.model_choice?.choice,
             effort: json.answers?.effort_choice?.choice,
-            profile: json.answers?.profile_choice?.choice,
+            toolset: json.answers?.toolset_choice?.choice,
             agent: json.answers?.agent_choice?.choice,
             confidence: json.answers?.placement?.confidence,
           },
           input.models,
           input.efforts,
-          input.profiles,
+          input.toolsets,
         );
       } catch (err) {
         lastError = new Error(`${name}: ${err.message}`);

@@ -84,7 +84,7 @@ test("a local provider between jev and heuristics still answers when a redaction
   // Arrange
   const jev = down(true);
   const pc = answer({ placement: "subagent", model: "sonnet" });
-  const config = merge(DEFAULTS, { chains: { personal: ["jev", "pc", "heuristics"] } });
+  const config = merge(DEFAULTS, { chain: ["jev", "pc", "heuristics"] });
   const { deps } = setup({ providers: { jev, pc, heuristics } });
   // Act
   const context = await handlePrompt({ input: { ...input, prompt: "email jo@acme.com about it" }, agent: "claude", config, deps });
@@ -95,7 +95,7 @@ test("a local provider between jev and heuristics still answers when a redaction
 test("a local provider answers after jev fails and before heuristics", async () => {
   // Arrange
   const pc = answer({ placement: "subagent", model: "sonnet" });
-  const config = merge(DEFAULTS, { chains: { personal: ["jev", "pc", "heuristics"] } });
+  const config = merge(DEFAULTS, { chain: ["jev", "pc", "heuristics"] });
   const { deps } = setup({ providers: { jev: down(true), pc, heuristics } });
   // Act
   const context = await handlePrompt({ input, agent: "claude", config, deps });
@@ -116,6 +116,17 @@ test("ollama and openai-compat providers count as local unless marked remote", (
   assert.deepEqual([made.a.remote, made.b.remote, made.c.remote], [false, false, true]);
 });
 
+test("a profile picks its own chain by origin URL", async () => {
+  // Arrange
+  const pc = answer({ placement: "subagent", model: "sonnet" });
+  const config = merge(DEFAULTS, { profiles: [{ name: "mine", match: ["mxttbennett"], chain: ["pc"] }] });
+  const { deps } = setup({ providers: { jev: down(true), pc, heuristics } });
+  // Act
+  const context = await handlePrompt({ input, agent: "claude", config, deps });
+  // Assert
+  assert.match(context, /subagent with model sonnet/);
+});
+
 test("work repos classify through the remote provider when the prompt is clean", async () => {
   // Arrange
   const jev = answer({ placement: "subagent", model: "sonnet" }, true);
@@ -127,7 +138,7 @@ test("work repos classify through the remote provider when the prompt is clean",
 });
 
 test("degraded notice appears once per session and re-arms after a success", async () => {
-  const config = merge(DEFAULTS, { chains: { personal: ["jev", "heuristics"] } });
+  const config = merge(DEFAULTS, { chain: ["jev", "heuristics"] });
   const providers = { jev: down(true), heuristics };
   const { deps } = setup({ providers, config });
   assert.match(await handlePrompt({ input, agent: "claude", config, deps }), /degraded/);

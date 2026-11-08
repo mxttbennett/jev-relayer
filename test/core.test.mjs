@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { runChain } from "../src/chain.mjs";
-import { DEFAULTS, isEnabled, loadConfig, merge, repoClass } from "../src/config.mjs";
+import { DEFAULTS, isEnabled, loadConfig, merge, profileFor } from "../src/config.mjs";
 import { resolveConfig } from "../src/defaults.mjs";
 import { migrateLegacyDirs } from "../src/legacy.mjs";
 import { heuristicVerdict, shouldClassify } from "../src/heuristics.mjs";
@@ -102,18 +102,27 @@ test("an out-of-range siblingMinConfidence falls back to the default", () => {
   assert.equal(loadConfig(file).siblingMinConfidence, 0.7);
 });
 
-test("config merges user overrides, replaces arrays, and classifies repos", () => {
-  const merged = merge(DEFAULTS, { chains: { work: ["heuristics"] }, agents: { codex: { enabled: false } } });
-  assert.deepEqual(merged.chains.work, ["heuristics"]);
-  assert.deepEqual(merged.chains.personal, DEFAULTS.chains.personal);
+test("config merges user overrides, replaces arrays, and classifies repos by profile", () => {
+  const merged = merge(DEFAULTS, { chain: ["heuristics"], agents: { codex: { enabled: false } } });
+  assert.deepEqual(merged.chain, ["heuristics"]);
+  assert.deepEqual(merged.profiles, []);
   assert.equal(isEnabled(merged, "codex", {}), false);
   assert.equal(isEnabled(merged, "claude", {}), true);
   assert.equal(isEnabled(merged, "claude", { JEV_RELAYER: "off" }), false);
   assert.equal(isEnabled(merged, "claude", { JEV_RELAY: "off" }), false);
   assert.equal(isEnabled(merged, "claude", { JEV_RELAY: "off" }), false);
-  assert.equal(repoClass(DEFAULTS, "/x", () => "git@github-personal:mxttbennett/dots.git"), "personal");
-  assert.equal(repoClass(DEFAULTS, "/x", () => "git@github.com:acme-corp/work-app.git"), "work");
-  assert.equal(repoClass(DEFAULTS, "/x", () => ""), "work");
+  const config = merge(DEFAULTS, {
+    profiles: [
+      { name: "personal", match: ["mxttbennett"], chain: ["pc", "heuristics"] },
+      { name: "client", match: ["acme-corp"] },
+    ],
+  });
+  const remote = (url) => profileFor(config, "/x", () => url);
+  assert.deepEqual(remote("git@github-personal:mxttbennett/dots.git"), { name: "personal", chain: ["pc", "heuristics"] });
+  assert.deepEqual(remote("git@github.com:acme-corp/app.git"), { name: "client", chain: DEFAULTS.chain });
+  assert.deepEqual(remote("git@github.com:other/app.git"), { name: "default", chain: DEFAULTS.chain });
+  assert.deepEqual(profileFor(config, "/x", () => ""), { name: "default", chain: DEFAULTS.chain });
+  assert.equal(profileFor(DEFAULTS, "/x", () => "git@github-personal:mxttbennett/dots.git").name, "default");
 });
 
 test("jev provider tries OpenRouter then TypeSafe and accepts JEV_API_KEY", async () => {

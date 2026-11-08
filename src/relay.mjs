@@ -1,6 +1,6 @@
 import { AGENT_META } from "./agent-meta.mjs";
 import { runChain } from "./chain.mjs";
-import { isEnabled, repoClass } from "./defaults.mjs";
+import { isEnabled, profileFor } from "./defaults.mjs";
 import { shouldClassify } from "./heuristics.mjs";
 import {
   DEGRADED_BADGE,
@@ -9,7 +9,7 @@ import {
   buildNudge,
   skipNotice,
 } from "./nudge.mjs";
-import { claudeProfileFlags, profileDescriptions } from "./profiles.mjs";
+import { claudeToolsetFlags, toolsetDescriptions } from "./toolsets.mjs";
 import { redact } from "./redact.mjs";
 
 const TURN_CHARS = 1500;
@@ -34,15 +34,16 @@ export function classifyFields({ result, cls, hits, low, raw, downgraded, prompt
 }
 
 export async function classify(signals, config, deps) {
-  const cls = repoClass(config, signals.cwd, deps.remoteOf);
+  const profile = profileFor(config, signals.cwd, deps.remoteOf);
+  const cls = profile.name;
   const { text, hits } = redact(signals.text, config.redact.names);
   const models = config.models[signals.agent] ?? {};
   const { efforts } = config;
-  const profiles = signals.agent === "claude" ? profileDescriptions(config.profiles) : {};
-  const names = config.chains[cls].filter(
+  const toolsets = signals.agent === "claude" ? toolsetDescriptions(config.toolsets) : {};
+  const names = profile.chain.filter(
     (name) => !(hits > 0 && deps.providers[name]?.remote),
   );
-  const result = await runChain(names, deps.providers, { ...signals, models, efforts, profiles, text: text.slice(-TEXT_CHARS) }, deps.breaker);
+  const result = await runChain(names, deps.providers, { ...signals, models, efforts, toolsets, text: text.slice(-TEXT_CHARS) }, deps.breaker);
   const low = !result.heuristic && result.verdict.confidence != null && result.verdict.confidence < config.minConfidence;
   const raw = result.verdict;
   const weakSibling =
@@ -128,7 +129,7 @@ export async function handlePrompt({ input, agent, config, deps }) {
   else if (!result.heuristic && result.verdict.model) {
     state.model = { value: result.verdict.model, at: deps.now() };
   }
-  const flags = agent === "claude" ? claudeProfileFlags(config.profiles[result.verdict.profile], deps.home) : [];
+  const flags = agent === "claude" ? claudeToolsetFlags(config.toolsets[result.verdict.toolset], deps.home) : [];
   const nudge = buildNudge(result.verdict, { agent, contextTokens, flags });
   if (nudge) {
     lines.push(nudge);

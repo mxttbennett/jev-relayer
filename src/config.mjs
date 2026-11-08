@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { repoClass as classifyRepo, resolveConfig } from "./defaults.mjs";
+import { profileFor as matchRepo, resolveConfig } from "./defaults.mjs";
 
 export { DEFAULTS, describeModels, isEnabled, merge } from "./defaults.mjs";
 
@@ -28,4 +28,4 @@ export function gitRemote(cwd) {
   }
 }
 
-export const repoClass = (config, cwd, remoteOf = gitRemote) => classifyRepo(config, cwd, remoteOf);
+export const profileFor = (config, cwd, remoteOf = gitRemote) => matchRepo(config, cwd, remoteOf);

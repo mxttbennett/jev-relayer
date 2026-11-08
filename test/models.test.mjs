@@ -58,7 +58,7 @@ test("a user models list replaces the default list for that agent only", () => {
 test("classify passes each agent its own models, and none when an agent lists none", async () => {
   const seen = [];
   const providers = { heuristics: { remote: false, heuristic: true, run: async (input) => { seen.push(Object.keys(input.models)); return { placement: "inline", model: null }; } } };
-  const config = merge(DEFAULTS, { chains: { work: ["heuristics"], personal: ["heuristics"] } });
+  const config = merge(DEFAULTS, { chain: ["heuristics"] });
   config.models = { claude: two, codex: {} };
   const deps = { providers, remoteOf: () => "" };
   await classify({ text: "x", prompt: "x", agent: "claude", cwd: "/x" }, config, deps);
@@ -145,7 +145,7 @@ test("a low-confidence verdict drops its effort along with its model", async () 
   // Arrange
   const verdict = { placement: "subagent", model: "haiku", effort: "high", confidence: 0.2 };
   const providers = { jev: { remote: false, heuristic: false, run: async () => verdict } };
-  const config = merge(DEFAULTS, { chains: { work: ["jev"], personal: ["jev"] } });
+  const config = merge(DEFAULTS, { chain: ["jev"] });
 
   // Act
   const { result } = await classify({ text: "x", prompt: "x", agent: "claude", cwd: "/x" }, config, { providers, remoteOf: () => "" });
