@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DEFAULTS, merge } from "../src/config.mjs";
 import { buildNotice } from "../src/nudge.mjs";
+import { createProviders } from "../src/providers.mjs";
 import { handlePrompt as run, pickSubagentModel } from "../src/relay.mjs";
 
 const handlePrompt = async (args) => (await run(args))?.context ?? null;
@@ -77,6 +78,42 @@ test("a redaction hit keeps the prompt away from remote providers in personal an
     // Assert
     assert.equal(called, false, remote);
   }
+});
+
+test("a local provider between jev and heuristics still answers when a redaction hit drops jev", async () => {
+  // Arrange
+  const jev = down(true);
+  const pc = answer({ placement: "subagent", model: "sonnet" });
+  const config = merge(DEFAULTS, { chains: { personal: ["jev", "pc", "heuristics"] } });
+  const { deps } = setup({ providers: { jev, pc, heuristics } });
+  // Act
+  const context = await handlePrompt({ input: { ...input, prompt: "email jo@acme.com about it" }, agent: "claude", config, deps });
+  // Assert
+  assert.match(context, /subagent with model sonnet/);
+});
+
+test("a local provider answers after jev fails and before heuristics", async () => {
+  // Arrange
+  const pc = answer({ placement: "subagent", model: "sonnet" });
+  const config = merge(DEFAULTS, { chains: { personal: ["jev", "pc", "heuristics"] } });
+  const { deps } = setup({ providers: { jev: down(true), pc, heuristics } });
+  // Act
+  const context = await handlePrompt({ input, agent: "claude", config, deps });
+  // Assert
+  assert.match(context, /subagent with model sonnet/);
+});
+
+test("ollama and openai-compat providers count as local unless marked remote", () => {
+  // Arrange
+  const providers = {
+    a: { type: "ollama", baseUrl: "http://x" },
+    b: { type: "openai-compat", baseUrl: "http://x" },
+    c: { type: "ollama", baseUrl: "http://x", remote: true },
+  };
+  // Act
+  const made = createProviders({ providers }, {});
+  // Assert
+  assert.deepEqual([made.a.remote, made.b.remote, made.c.remote], [false, false, true]);
 });
 
 test("work repos classify through the remote provider when the prompt is clean", async () => {

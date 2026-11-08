@@ -122,6 +122,28 @@ Providers: `jev` (OpenRouter or TypeSafe), `ollama`, `openai-compat`, `heuristic
 `openai-compat` need a `providers` entry of your own, such as a local model, before a chain can
 name them.
 
+### Add a local model to the chain
+
+Define the model under `providers`, then name it in a chain. Any URL works: `localhost`, a LAN
+address or a Tailscale IP.
+
+```json
+{
+  "chains": { "work": ["jev", "local", "heuristics"], "personal": ["jev", "local", "heuristics"] },
+  "providers": {
+    "local": { "type": "ollama", "baseUrl": "http://localhost:11434", "model": "qwen3:8b", "timeoutMs": 8000 }
+  }
+}
+```
+
+- `ollama` and `openai-compat` count as local, so a redaction hit keeps them in the chain. Set
+  `"remote": true` on one that sends prompts off your network.
+- Put the local provider first to keep prompts on your machines whenever it is up.
+- The first call after the model idles loads it, which can exceed `timeoutMs`. That call falls
+  through to the next provider.
+- A provider that keeps failing is skipped by the circuit breaker, so a powered-off host costs
+  one timeout, not one per prompt.
+
 If every classifier fails, the hook says so once per session and falls back to heuristics.
 
 ### Privacy
