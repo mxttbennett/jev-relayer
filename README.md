@@ -124,14 +124,14 @@ name them.
 
 ### Add a local model to the chain
 
-Define the model under `providers`, then name it in a chain. Any URL works: `127.0.0.1`, a LAN
+Define the model under `providers`, then name it in a chain. Any URL works: `localhost`, a LAN
 address or a Tailscale IP.
 
 ```json
 {
-  "chains": { "work": ["jev", "pc", "heuristics"], "personal": ["jev", "pc", "heuristics"] },
+  "chains": { "work": ["jev", "local", "heuristics"], "personal": ["jev", "local", "heuristics"] },
   "providers": {
-    "pc": { "type": "ollama", "baseUrl": "http://100.78.239.105:11434", "model": "bonsai-2:27b", "timeoutMs": 8000 }
+    "local": { "type": "ollama", "baseUrl": "http://localhost:11434", "model": "qwen3:8b", "timeoutMs": 8000 }
   }
 }
 ```
