@@ -112,20 +112,20 @@ replaces the default list.
 ### Classifier chains
 
 A chain lists providers in order, and the first that answers wins. `chain` sets the default,
-`["jev", "heuristics"]`. A `repos` entry gives matching repositories their own chain:
+`["jev", "heuristics"]`. A profile gives matching repositories their own chain:
 
 ```json
 {
-  "repos": [
+  "profiles": [
     { "name": "personal", "match": ["your-github-name"], "chain": ["jev", "heuristics"] },
     { "name": "client", "match": ["acme-corp"], "chain": ["heuristics"] }
   ]
 }
 ```
 
-- `match` holds strings tested against the repo's `origin` URL. The first entry with a hit wins.
-- A repo that matches no entry, or has no remote, uses `chain` and reports as `default` in stats.
-- `repos` is empty by default.
+- `match` holds strings tested against the repo's `origin` URL. The first profile with a hit wins.
+- A repo that matches no profile, or has no remote, uses `chain` and reports as `default` in stats.
+- `profiles` is empty by default.
 
 Providers: `jev` (OpenRouter or TypeSafe), `ollama`, `openai-compat`, `heuristics`. `ollama` and
 `openai-compat` need a `providers` entry of your own, such as a local model, before a chain can
@@ -260,16 +260,16 @@ jev: sonnet · low
 Set `"macNotifications": true` to also get a native macOS notification whenever jev-relayer acts or
 the decision changes. It is off by default.
 
-### Tool profiles
+### Toolsets
 
-A profile limits the tools a sibling session starts with, so it loads fewer tool schemas and MCP
+A toolset limits the tools a sibling session starts with, so it loads fewer tool schemas and MCP
 server instructions. In a test with `claude -p` on haiku, `--strict-mcp-config` plus
 `--tools Read,Grep,Glob,Bash` cut the starting input from 37.5k to 16.2k tokens.
 
-Define profiles in `~/.config/jev-relayer/config.json`. See `config.example.json`.
+Define toolsets in `~/.config/jev-relayer/config.json`. See `config.example.json`.
 
 ```json
-"profiles": {
+"toolsets": {
   "lean": { "description": "Read-only search and summaries.", "claude": { "tools": ["Read", "Grep", "Glob", "Bash"] } },
   "work": { "description": "Needs Linear or Harvest.", "claude": { "mcpConfig": "~/.config/jev-relayer/mcp-work.json", "tools": ["Read", "Bash", "Edit"] } }
 }
@@ -277,7 +277,7 @@ Define profiles in `~/.config/jev-relayer/config.json`. See `config.example.json
 
 The classifier reads each `description` and picks one. For a Claude sibling, jev-relayer adds
 `--strict-mcp-config`, `--mcp-config <file>` when `mcpConfig` is set, and `--tools <list>`. With no
-`profiles` key, nothing changes. Profiles apply to Claude siblings only. Subagents are not covered yet.
+`toolsets` key, nothing changes. Toolsets apply to Claude siblings only. Subagents are not covered yet.
 
 ### Band and verdict line
 

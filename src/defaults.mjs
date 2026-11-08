@@ -43,7 +43,7 @@ export const DEFAULTS = {
   statusNotice: true,
   macNotifications: false,
   report: "changes",
-  repos: [],
+  profiles: [],
   models: { claude: CLAUDE_MODELS, codex: CODEX_MODELS },
   efforts: {
     low: "Mechanical, lookup or clearly specified work. The default unless the task needs weighing options",
@@ -51,7 +51,7 @@ export const DEFAULTS = {
     high: "Hard debugging, design and multi-step reasoning",
     xhigh: "The hardest work where extra reasoning pays off",
   },
-  profiles: {},
+  toolsets: {},
   redact: { names: [] },
   chain: ["jev", "heuristics"],
   providers: {
@@ -76,7 +76,7 @@ export function resolveConfig(user = {}) {
   const written = Object.entries(user.models ?? {}).map(([agent, models]) => [agent, describeModels(models)]);
   config.models = { ...DEFAULTS.models, ...Object.fromEntries(written) };
   if (user.efforts) config.efforts = user.efforts;
-  if (user.profiles) config.profiles = user.profiles;
+  if (user.toolsets) config.toolsets = user.toolsets;
   return config;
 }
 
@@ -85,8 +85,8 @@ export function isEnabled(config, agent, env = {}) {
   return config.agents[agent]?.enabled !== false;
 }
 
-export function repoFor(config, cwd, remoteOf) {
+export function profileFor(config, cwd, remoteOf) {
   const remote = cwd ? remoteOf(cwd) : "";
-  const entry = config.repos.find((r) => r.match?.some((m) => remote.includes(m)));
+  const entry = config.profiles.find((r) => r.match?.some((m) => remote.includes(m)));
   return { name: entry?.name ?? "default", chain: entry?.chain ?? config.chain };
 }

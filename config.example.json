@@ -1,5 +1,5 @@
 {
-  "profiles": {
+  "toolsets": {
     "lean": {
       "description": "Read-only search, summaries and quick edits. Needs no external services.",
       "claude": { "tools": ["Read", "Grep", "Glob", "Bash"] }

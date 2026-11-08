@@ -1,9 +1,9 @@
-export function profileDescriptions(profiles = {}) {
-  return Object.fromEntries(Object.entries(profiles).map(([name, p]) => [name, p.description ?? ""]));
+export function toolsetDescriptions(toolsets = {}) {
+  return Object.fromEntries(Object.entries(toolsets).map(([name, p]) => [name, p.description ?? ""]));
 }
 
-export function claudeProfileFlags(profile, home) {
-  const claude = profile?.claude;
+export function claudeToolsetFlags(toolset, home) {
+  const claude = toolset?.claude;
   if (!claude) return [];
   const flags = ["--strict-mcp-config"];
   if (claude.mcpConfig) flags.push("--mcp-config", claude.mcpConfig.replace(/^~(?=\/)/, home));

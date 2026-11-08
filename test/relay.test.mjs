@@ -116,10 +116,10 @@ test("ollama and openai-compat providers count as local unless marked remote", (
   assert.deepEqual([made.a.remote, made.b.remote, made.c.remote], [false, false, true]);
 });
 
-test("a repos entry picks its own chain by origin URL", async () => {
+test("a profile picks its own chain by origin URL", async () => {
   // Arrange
   const pc = answer({ placement: "subagent", model: "sonnet" });
-  const config = merge(DEFAULTS, { repos: [{ name: "mine", match: ["mxttbennett"], chain: ["pc"] }] });
+  const config = merge(DEFAULTS, { profiles: [{ name: "mine", match: ["mxttbennett"], chain: ["pc"] }] });
   const { deps } = setup({ providers: { jev: down(true), pc, heuristics } });
   // Act
   const context = await handlePrompt({ input, agent: "claude", config, deps });
