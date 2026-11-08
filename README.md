@@ -111,16 +111,27 @@ replaces the default list.
 
 ### Classifier chains
 
-Each repo class tries its providers in order and uses the first that answers.
+A chain lists providers in order, and the first that answers wins. `chain` sets the default,
+`["jev", "heuristics"]`. A `repos` entry gives matching repositories their own chain:
 
-| Repo class | Default chain |
-| --- | --- |
-| personal (origin URL contains a `personalRemotePatterns` entry, empty by default) | `jev`, `heuristics` |
-| work (everything else, including no remote) | `jev`, `heuristics` |
+```json
+{
+  "repos": [
+    { "name": "personal", "match": ["your-github-name"], "chain": ["jev", "heuristics"] },
+    { "name": "client", "match": ["acme-corp"], "chain": ["heuristics"] }
+  ]
+}
+```
+
+- `match` holds strings tested against the repo's `origin` URL. The first entry with a hit wins.
+- A repo that matches no entry, or has no remote, uses `chain` and reports as `default` in stats.
+- `repos` is empty by default.
 
 Providers: `jev` (OpenRouter or TypeSafe), `ollama`, `openai-compat`, `heuristics`. `ollama` and
 `openai-compat` need a `providers` entry of your own, such as a local model, before a chain can
 name them.
+
+If every classifier fails, the hook says so once per session and falls back to heuristics.
 
 ### Add a local model to the chain
 
@@ -129,7 +140,7 @@ address or a Tailscale IP.
 
 ```json
 {
-  "chains": { "work": ["jev", "local", "heuristics"], "personal": ["jev", "local", "heuristics"] },
+  "chain": ["jev", "local", "heuristics"],
   "providers": {
     "local": { "type": "ollama", "baseUrl": "http://localhost:11434", "model": "qwen3:8b", "timeoutMs": 8000 }
   }
@@ -144,8 +155,6 @@ address or a Tailscale IP.
 - A provider that keeps failing is skipped by the circuit breaker, so a powered-off host costs
   one timeout, not one per prompt.
 
-If every classifier fails, the hook says so once per session and falls back to heuristics.
-
 ### Privacy
 
 - Prompts are redacted before they leave the machine, in personal and work repos alike.
@@ -158,7 +167,7 @@ If every classifier fails, the hook says so once per session and falls back to h
 Defaults live in `src/defaults.mjs`. Override any of them in `~/.config/jev-relayer/config.json`:
 
 ```json
-{ "chains": { "work": ["heuristics"] }, "redact": { "names": ["Acme"] } }
+{ "chain": ["heuristics"], "redact": { "names": ["Acme"] } }
 ```
 
 Keys come from the environment or `~/.config/jev-opus/.env`: `OPENROUTER_API_KEY`,

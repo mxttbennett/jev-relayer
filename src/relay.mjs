@@ -1,6 +1,6 @@
 import { AGENT_META } from "./agent-meta.mjs";
 import { runChain } from "./chain.mjs";
-import { isEnabled, repoClass } from "./defaults.mjs";
+import { isEnabled, repoFor } from "./defaults.mjs";
 import { shouldClassify } from "./heuristics.mjs";
 import {
   DEGRADED_BADGE,
@@ -34,12 +34,13 @@ export function classifyFields({ result, cls, hits, low, raw, downgraded, prompt
 }
 
 export async function classify(signals, config, deps) {
-  const cls = repoClass(config, signals.cwd, deps.remoteOf);
+  const repo = repoFor(config, signals.cwd, deps.remoteOf);
+  const cls = repo.name;
   const { text, hits } = redact(signals.text, config.redact.names);
   const models = config.models[signals.agent] ?? {};
   const { efforts } = config;
   const profiles = signals.agent === "claude" ? profileDescriptions(config.profiles) : {};
-  const names = config.chains[cls].filter(
+  const names = repo.chain.filter(
     (name) => !(hits > 0 && deps.providers[name]?.remote),
   );
   const result = await runChain(names, deps.providers, { ...signals, models, efforts, profiles, text: text.slice(-TEXT_CHARS) }, deps.breaker);

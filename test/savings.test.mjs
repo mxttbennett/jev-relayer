@@ -107,7 +107,7 @@ test("summarize leaves legacy applied events out of the cost estimate", () => {
 
 test("default chains no longer reference local qwen providers", () => {
   // Arrange & Act & Assert
-  assert.deepEqual(DEFAULTS.chains.work, ["jev", "heuristics"]);
+  assert.deepEqual(DEFAULTS.chain, ["jev", "heuristics"]);
   assert.deepEqual(Object.keys(DEFAULTS.providers), ["jev", "heuristics"]);
 });
 

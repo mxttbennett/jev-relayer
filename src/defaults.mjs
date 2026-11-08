@@ -43,7 +43,7 @@ export const DEFAULTS = {
   statusNotice: true,
   macNotifications: false,
   report: "changes",
-  personalRemotePatterns: [],
+  repos: [],
   models: { claude: CLAUDE_MODELS, codex: CODEX_MODELS },
   efforts: {
     low: "Mechanical, lookup or clearly specified work. The default unless the task needs weighing options",
@@ -53,10 +53,7 @@ export const DEFAULTS = {
   },
   profiles: {},
   redact: { names: [] },
-  chains: {
-    work: ["jev", "heuristics"],
-    personal: ["jev", "heuristics"],
-  },
+  chain: ["jev", "heuristics"],
   providers: {
     jev: { type: "jev", timeoutMs: 5000 },
     heuristics: { type: "heuristics" },
@@ -88,7 +85,8 @@ export function isEnabled(config, agent, env = {}) {
   return config.agents[agent]?.enabled !== false;
 }
 
-export function repoClass(config, cwd, remoteOf) {
+export function repoFor(config, cwd, remoteOf) {
   const remote = cwd ? remoteOf(cwd) : "";
-  return config.personalRemotePatterns.some((p) => remote.includes(p)) ? "personal" : "work";
+  const entry = config.repos.find((r) => r.match?.some((m) => remote.includes(m)));
+  return { name: entry?.name ?? "default", chain: entry?.chain ?? config.chain };
 }
