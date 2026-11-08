@@ -115,7 +115,7 @@ Each repo class tries its providers in order and uses the first that answers.
 
 | Repo class | Default chain |
 | --- | --- |
-| personal (origin matches `personalRemotePatterns`) | `jev`, `heuristics` |
+| personal (origin URL contains a `personalRemotePatterns` entry, empty by default) | `jev`, `heuristics` |
 | work (everything else, including no remote) | `jev`, `heuristics` |
 
 Providers: `jev` (OpenRouter or TypeSafe), `ollama`, `openai-compat`, `heuristics`. `ollama` and
@@ -155,7 +155,7 @@ If every classifier fails, the hook says so once per session and falls back to h
 
 ## Configure
 
-Defaults live in `src/config.mjs`. Override any of them in `~/.config/jev-relayer/config.json`:
+Defaults live in `src/defaults.mjs`. Override any of them in `~/.config/jev-relayer/config.json`:
 
 ```json
 { "chains": { "work": ["heuristics"] }, "redact": { "names": ["Acme"] } }

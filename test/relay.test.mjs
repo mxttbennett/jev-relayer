@@ -84,7 +84,7 @@ test("a local provider between jev and heuristics still answers when a redaction
   // Arrange
   const jev = down(true);
   const pc = answer({ placement: "subagent", model: "sonnet" });
-  const config = merge(DEFAULTS, { chains: { personal: ["jev", "pc", "heuristics"] } });
+  const config = merge(DEFAULTS, { chains: { work: ["jev", "pc", "heuristics"] } });
   const { deps } = setup({ providers: { jev, pc, heuristics } });
   // Act
   const context = await handlePrompt({ input: { ...input, prompt: "email jo@acme.com about it" }, agent: "claude", config, deps });
@@ -95,7 +95,7 @@ test("a local provider between jev and heuristics still answers when a redaction
 test("a local provider answers after jev fails and before heuristics", async () => {
   // Arrange
   const pc = answer({ placement: "subagent", model: "sonnet" });
-  const config = merge(DEFAULTS, { chains: { personal: ["jev", "pc", "heuristics"] } });
+  const config = merge(DEFAULTS, { chains: { work: ["jev", "pc", "heuristics"] } });
   const { deps } = setup({ providers: { jev: down(true), pc, heuristics } });
   // Act
   const context = await handlePrompt({ input, agent: "claude", config, deps });

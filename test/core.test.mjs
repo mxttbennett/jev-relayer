@@ -111,7 +111,8 @@ test("config merges user overrides, replaces arrays, and classifies repos", () =
   assert.equal(isEnabled(merged, "claude", { JEV_RELAYER: "off" }), false);
   assert.equal(isEnabled(merged, "claude", { JEV_RELAY: "off" }), false);
   assert.equal(isEnabled(merged, "claude", { JEV_RELAY: "off" }), false);
-  assert.equal(repoClass(DEFAULTS, "/x", () => "git@github-personal:mxttbennett/dots.git"), "personal");
+  assert.equal(repoClass(merge(DEFAULTS, { personalRemotePatterns: ["mxttbennett"] }), "/x", () => "git@github-personal:mxttbennett/dots.git"), "personal");
+  assert.equal(repoClass(DEFAULTS, "/x", () => "git@github-personal:mxttbennett/dots.git"), "work");
   assert.equal(repoClass(DEFAULTS, "/x", () => "git@github.com:acme-corp/work-app.git"), "work");
   assert.equal(repoClass(DEFAULTS, "/x", () => ""), "work");
 });

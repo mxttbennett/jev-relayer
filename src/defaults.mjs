@@ -24,7 +24,7 @@ export const DEFAULTS = {
     earlyPrompts: 3,
     heavyFloorTokens: 40000,
     heavyPatterns: [
-      "(^|\\s)/(peer-review-pr|deep-plan|quick-wins|untested|code-review|security-review|parallel|babysit-pr|update-cogniform-sdk|archive-transcripts)\\b",
+      "(^|\\s)/(peer-review-pr|deep-plan|quick-wins|untested|code-review|security-review|parallel|babysit-pr)\\b",
       "\\b(audit|review) (the )?(whole|entire|all)\\b",
       "\\bacross (the )?(repo|codebase)\\b",
       "\\bfind all\\b",
@@ -43,7 +43,7 @@ export const DEFAULTS = {
   statusNotice: true,
   macNotifications: false,
   report: "changes",
-  personalRemotePatterns: ["mxttbennett", "github-personal"],
+  personalRemotePatterns: [],
   models: { claude: CLAUDE_MODELS, codex: CODEX_MODELS },
   efforts: {
     low: "Mechanical, lookup or clearly specified work. The default unless the task needs weighing options",
