@@ -1,14 +1,36 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { AGENTS } from "./agents.mjs";
 import { createBreaker } from "./breaker.mjs";
-import { gitRemote } from "./config.mjs";
+import { gitOriginArgv } from "./defaults.mjs";
 import { parseEnv } from "./envfile.mjs";
+import { jevEnvFile } from "./paths.mjs";
 import { createProviders } from "./providers.mjs";
 import { STATE_DIR, createStateStore } from "./state.mjs";
+import { parseTranscript } from "./transcripts.mjs";
 
-const JEV_ENV = join(homedir(), ".config", "jev-opus", ".env");
+const TAIL_BYTES = 1_000_000;
+const BREAKER_FILE = join(STATE_DIR, "breaker.json");
+
+function readTail(path) {
+  try {
+    const fd = openSync(path, "r");
+    try {
+      const { size } = fstatSync(fd);
+      const length = Math.min(size, TAIL_BYTES);
+      const buffer = Buffer.alloc(length);
+      readSync(fd, buffer, 0, length, size - length);
+      const text = buffer.toString("utf8");
+      return size > length ? text.slice(text.indexOf("\n") + 1) : text;
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return "";
+  }
+}
 
 function readEnvFile(path) {
   try {
@@ -18,7 +40,14 @@ function readEnvFile(path) {
   }
 }
 
-const BREAKER_FILE = join(STATE_DIR, "breaker.json");
+function gitRemote(cwd) {
+  const [cmd, ...args] = gitOriginArgv(cwd);
+  try {
+    return execFileSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 2000 }).trim();
+  } catch {
+    return "";
+  }
+}
 
 const fileBreaker = () =>
   createBreaker({
@@ -35,14 +64,15 @@ export function defaultDeps(agent, config) {
   const spec = AGENTS[agent];
   if (!spec) throw new Error(`unsupported agent: ${agent}`);
   const env = process.env;
+  const home = homedir();
   return {
     env,
-    home: homedir(),
+    home,
     now: Date.now,
     remoteOf: gitRemote,
     state: createStateStore(),
     breaker: fileBreaker(),
-    readTranscript: spec.readTranscript,
-    providers: createProviders(config, { config, env, fetch: timedFetch, readJevEnv: () => readEnvFile(JEV_ENV) }),
+    readTranscript: (path) => parseTranscript(readTail(path), spec.parseLine),
+    providers: createProviders(config, { env, fetch: timedFetch, readJevEnv: () => readEnvFile(jevEnvFile(home)) }),
   };
 }

@@ -1,4 +1,4 @@
-import { AGENT_META } from "./agent-meta.mjs";
+import { AGENTS } from "./agents.mjs";
 import { tierOf } from "./tiers.mjs";
 
 export const DEGRADED_NOTICE =
@@ -6,41 +6,45 @@ export const DEGRADED_NOTICE =
 
 export const DEGRADED_BADGE = "⚠ jev-relayer: no classifier answered, using heuristics";
 
-const detail = (verdict) => {
-  const model = verdict.model ? ` · ${verdict.model}` : "";
-  const confidence = verdict.confidence == null ? "" : ` · ${verdict.confidence.toFixed(2)}`;
-  return `${model}${confidence}`;
-};
+const confidenceText = (confidence) => (confidence == null ? null : confidence.toFixed(2));
+const tokensText = (tokens) => `${Math.round(tokens / 1000)}k`;
+const dotted = (parts) => parts.filter(Boolean).map((part) => ` · ${part}`).join("");
 
 export function buildNotice(verdict) {
-  if (verdict.placement === "subagent") return `↪ jev-relayer: subagent${detail(verdict)}`;
-  if (verdict.placement === "sibling") return `↪ jev-relayer: sibling session${detail(verdict)}`;
+  const detail = dotted([verdict.model, confidenceText(verdict.confidence)]);
+  if (verdict.placement === "subagent") return `↪ jev-relayer: subagent${detail}`;
+  if (verdict.placement === "sibling") return `↪ jev-relayer: sibling session${detail}`;
   return null;
 }
 
-export const skipNotice = (why) => `· jev-relayer: skipped · ${why}`;
+export const gateSkipNotice = (contextTokens, cache) => `· jev-relayer: skipped · ${tokensText(contextTokens)} tokens, cache ${cache}`;
+
+export const cooldownSkipNotice = (since, prompts) => `· jev-relayer: skipped · cooling down (${since}/${prompts})`;
 
 export function appliedNotice({ current, picked, effort, switched, blocked, contextTokens, confidence }) {
-  const tail = [effort, confidence == null ? null : confidence.toFixed(2)].filter(Boolean).map((part) => ` · ${part}`).join("");
+  const tail = dotted([effort, confidenceText(confidence)]);
   if (switched) return `jev → ${picked}${tail}`;
   const stay = tierOf(current) ?? current;
-  if (blocked) {
-    const size = `${Math.round(contextTokens / 1000)}k`;
-    return `jev: staying on ${stay} · ${tierOf(picked) ?? picked} skipped, ${size} context is cached${tail}`;
-  }
+  if (blocked) return `jev: staying on ${stay} · ${tierOf(picked) ?? picked} skipped, ${tokensText(contextTokens)} context is cached${tail}`;
   return `jev: ${stay}${tail}`;
 }
 
 export const modelNotice = (model) => `↪ jev-relayer: subagent model → ${model}`;
 
+export const decisionLabel = ({ placement, model, effort, confidence }) =>
+  [placement, [model, effort].filter(Boolean).join(" · "), confidenceText(confidence)].filter(Boolean).join(" · ");
+
+export const bandLabel = ({ placement, model, confidence }) =>
+  `jev: ${placement} · ${model ?? "default"}${dotted([confidenceText(confidence)])}`;
+
 export function buildNudge(verdict, { agent, contextTokens, flags = [] }) {
-  const size = `${Math.round(contextTokens / 1000)}k tokens`;
+  const size = `${tokensText(contextTokens)} tokens`;
   const model = verdict.model ? ` with model ${verdict.model}` : "";
   if (verdict.placement === "subagent") {
     return `jev-relayer: this prompt looks self-contained and read-heavy, and the conversation is large (${size}). Prefer a subagent${model} (Explore for searches) over continuing inline.`;
   }
   if (verdict.placement === "sibling") {
-    const command = AGENT_META[agent].siblingCommand(verdict.model, flags);
+    const command = [...AGENTS[agent].siblingArgv(verdict.model, flags), '"<brief>"'].join(" ");
     return `jev-relayer: this prompt looks independent of the conversation, which is large (${size}). Write a short handoff brief without pasting this conversation, show it to the user, and once they approve run: ${command}`;
   }
   return null;

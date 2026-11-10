@@ -11,18 +11,18 @@ const toolsets = {
 };
 const offered = toolsetDescriptions(toolsets);
 
-test("no toolsets key leaves classifier output and verdicts unchanged", () => {
+test("no toolsets key leaves the classifier unasked and the verdict without a toolset", () => {
   assert.deepEqual(resolveConfig().toolsets, {});
-  assert.doesNotMatch(classifierPrompt({ text: "x" }), /toolset/);
-  assert.equal(jevQuestions({}, {}, {}).toolset_choice, undefined);
-  assert.equal("toolset" in toVerdict({ placement: "inline" }), false);
+  assert.doesNotMatch(classifierPrompt("x"), /toolset/);
+  assert.equal(jevQuestions({}).toolset_choice, undefined);
+  assert.equal(toVerdict({ placement: "inline", toolset: "lean" }).toolset, null);
 });
 
 test("the classifier is offered the user's toolsets and must answer with one", () => {
-  assert.match(classifierPrompt({ text: "x", toolsets: offered }), /- work: needs Linear/);
-  assert.deepEqual(jevQuestions({}, {}, offered).toolset_choice.criteria, offered);
-  assert.equal(parseVerdict('{"placement":"sibling","toolset":"lean"}', {}, {}, offered).toolset, "lean");
-  assert.throws(() => toVerdict({ placement: "sibling", toolset: "huge" }, {}, {}, offered), /bad toolset/);
+  assert.match(classifierPrompt("x", { toolset: offered }), /- work: needs Linear/);
+  assert.deepEqual(jevQuestions({ toolset: offered }).toolset_choice.criteria, offered);
+  assert.equal(parseVerdict('{"placement":"sibling","toolset":"lean"}', { toolset: offered }).toolset, "lean");
+  assert.throws(() => toVerdict({ placement: "sibling", toolset: "huge" }, { toolset: offered }), /bad toolset/);
 });
 
 test("a toolset becomes claude flags: strict MCP, optional config file, tool list", () => {
@@ -48,7 +48,7 @@ test("the hook route turns the classifier's toolset into sibling flags", async (
   const { handlePrompt } = await import("../src/relay.mjs");
   const config = resolveConfig({ toolsets });
   const seen = [];
-  const jev = { remote: true, heuristic: false, run: async (input) => (seen.push(input.toolsets), { placement: "sibling", model: "haiku", effort: "low", toolset: "work", confidence: 0.95 }) };
+  const jev = { remote: true, heuristic: false, run: async (input) => (seen.push(input.offered.toolset), { placement: "sibling", model: "haiku", effort: "low", toolset: "work", confidence: 0.95 }) };
   const deps = {
     env: {},
     home: "/h",

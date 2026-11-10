@@ -1,7 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { agentNames as AGENTS } from "./agents.mjs";
-import { CONFIG_PATH, loadConfig, merge } from "./config.mjs";
+import { CONFIG_PATH, loadConfig } from "./config.mjs";
+import { merge } from "./defaults.mjs";
 import { runStats } from "./stats.mjs";
 
 export function setEnabled(userConfig, agents, enabled) {
@@ -11,7 +12,7 @@ export function setEnabled(userConfig, agents, enabled) {
 
 export function resolveAgents(target) {
   if (target === "all" || target === undefined) return AGENTS;
-  if (!AGENTS.includes(target)) throw new Error(`unknown agent: ${target} (claude, codex, all)`);
+  if (!AGENTS.includes(target)) throw new Error(`unknown agent: ${target} (${[...AGENTS, "all"].join(", ")})`);
   return [target];
 }
 
@@ -30,7 +31,7 @@ function writeUser(path, config) {
 
 export function runCli(argv, path = CONFIG_PATH) {
   const [command, target] = argv;
-  if (command === "stats") return runStats(argv.slice(1));
+  if (command === "stats") return runStats(argv.slice(1), { pricing: loadConfig(path).pricing });
   if (command === "status" || command === undefined) {
     const { agents, band } = loadConfig(path);
     const lines = AGENTS.map((a) => `${a}: ${agents[a].enabled === false ? "off" : "on"}`);
@@ -42,7 +43,7 @@ export function runCli(argv, path = CONFIG_PATH) {
     return runCli(["status"], path);
   }
   if (command !== "on" && command !== "off") {
-    throw new Error("usage: jev-relayer status|stats|on|off [claude|codex|all]|band on|off");
+    throw new Error(`usage: jev-relayer status|stats|on|off [${[...AGENTS, "all"].join("|")}]|band on|off`);
   }
   writeUser(path, setEnabled(readUser(path), resolveAgents(target), command === "on"));
   return runCli(["status"], path);

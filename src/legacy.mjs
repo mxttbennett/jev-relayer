@@ -1,18 +1,12 @@
 import { cpSync, existsSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
-
-const LEGACY = [
-  [".config", "jev-relay", "jev-relayer"],
-  [".local/state", "jev-relay", "jev-relayer"],
-];
+import { legacyDirs } from "./paths.mjs";
 
 export function migrateLegacyDirs(home = homedir()) {
-  for (const [base, from, to] of LEGACY) {
-    const source = join(home, base, from);
+  for (const [source, target] of legacyDirs(home)) {
     if (!existsSync(source)) continue;
     try {
-      cpSync(source, join(home, base, to), { recursive: true, force: false, errorOnExist: false });
+      cpSync(source, target, { recursive: true, force: false, errorOnExist: false });
       rmSync(source, { recursive: true, force: true });
     } catch {}
   }

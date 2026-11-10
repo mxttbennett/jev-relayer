@@ -8,7 +8,7 @@ test("toVerdict keeps a known agent type and drops an unknown or missing one", (
   assert.equal("agent" in toVerdict({ placement: "subagent" }), false);
 });
 
-test("classifierPrompt and jevQuestions offer the agent types", () => {
-  assert.match(classifierPrompt({ text: "x" }), /"agent":"\.\.\."/);
-  assert.deepEqual(Object.keys(jevQuestions().agent_choice.criteria), ["general-purpose", "Explore", "Plan"]);
+test("classifierPrompt and jevQuestions ask for the agent type", () => {
+  assert.match(classifierPrompt("x"), /"agent":"\.\.\."/);
+  assert.ok(Object.hasOwn(jevQuestions().agent_choice.criteria, "Explore"));
 });

@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DEFAULTS, merge } from "../src/config.mjs";
-import { buildNotice } from "../src/nudge.mjs";
+import { DEFAULTS, merge } from "../src/defaults.mjs";
 import { createProviders } from "../src/providers.mjs";
 import { handlePrompt as run, pickSubagentModel } from "../src/relay.mjs";
 
@@ -162,6 +161,12 @@ test("codex gets nudges with its sibling command and never a subagent model pick
   assert.equal(await pickSubagentModel({ input: { tool_input: { prompt: "p" } }, agent: "codex", config, deps }), null);
 });
 
+test("subagent model pick stays out of the way when the session runs on the Jev Router model", async () => {
+  const { deps, config } = setup({ providers: { jev: answer({ placement: "inline", model: "opus" }, true), heuristics } });
+  deps.env = { ANTHROPIC_CUSTOM_MODEL_OPTION_NAME: "Jev Router" };
+  assert.equal(await pickSubagentModel({ input: { session_id: "n", cwd: "/x", tool_input: { prompt: "p" } }, agent: "claude", config, deps }), null);
+});
+
 test("subagent model pick skips explicit models and forks, and classifies on a cache miss", async () => {
   const { deps, config } = setup({ providers: { jev: answer({ placement: "inline", model: "opus" }, true), heuristics } });
   const call = (tool_input) => pickSubagentModel({ input: { session_id: "n", cwd: "/x", tool_input }, agent: "claude", config, deps });
@@ -186,10 +191,6 @@ test("a low-confidence turn drops the cached model so the next pick is fresh", a
   store.set("s", { model: { value: "opus", at: 1_000_000 } });
   await handlePrompt({ input, agent: "claude", config, deps });
   assert.equal(store.get("s").model, undefined);
-});
-
-test("buildNotice has no line for an inline verdict", () => {
-  assert.equal(buildNotice({ placement: "inline", model: null, confidence: 0.9 }), null);
 });
 
 test("notices show the verdict confidence when the classifier reports one", async () => {

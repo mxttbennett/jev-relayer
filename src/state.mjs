@@ -1,8 +1,9 @@
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { stateDir } from "./paths.mjs";
 
-export const STATE_DIR = join(homedir(), ".local", "state", "jev-relayer");
+export const STATE_DIR = stateDir(homedir());
 
 export function createStateStore(dir = STATE_DIR) {
   const file = (id) => join(dir, "sessions", `${String(id).replace(/[^\w-]/g, "_")}.json`);

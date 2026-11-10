@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { DEFAULTS } from "../src/config.mjs";
+import { DEFAULTS } from "../src/defaults.mjs";
 import { runChain } from "../src/chain.mjs";
 import { handlePrompt, pickSubagentModel } from "../src/relay.mjs";
 import { formatSummary, percentile, readEvents, runStats, summarize } from "../src/stats.mjs";
@@ -102,7 +102,7 @@ test("summarize rates failures, fallbacks, overrides and sibling acceptance", ()
     { at: "2026-11-04T00:00:05Z", event: "applied", session: "s", switched: true, picked: "haiku", served: "claude-sonnet-5-5", servedMatches: false },
     { at: "2026-11-04T00:00:06Z", event: "deadline-miss", where: "submit" },
   ];
-  const s = summarize(events);
+  const s = summarize(events, DEFAULTS.pricing);
   assert.equal(s.volume.turns, 5);
   assert.equal(s.volume.gateSkipRate, 0.2);
   assert.equal(s.health.degradedRate, 0.25);
@@ -123,11 +123,12 @@ test("readEvents merges relay.log and per-session mod logs and honours --days", 
   const now = Date.parse("2026-11-04T12:00:00Z");
   writeFileSync(join(dir, "relay.log"), `${JSON.stringify({ at: "2026-10-01T00:00:00Z", event: "prompt" })}\n${JSON.stringify({ at: "2026-11-04T01:00:00Z", event: "prompt" })}\nnot json\n`);
   writeFileSync(join(dir, "mod", "a.jsonl"), `${JSON.stringify({ at: "2026-11-04T02:00:00Z", event: "decision" })}\n`);
-  assert.equal(readEvents(dir, { now }).length, 3);
+  assert.deepEqual(readEvents(dir, { now }).map((e) => e.origin ?? "hook"), ["hook", "hook", "mod"]);
   assert.equal(readEvents(dir, { days: 7, now }).length, 2);
-  assert.match(runStats(["--days", "7"], dir, now), /classified 2/);
-  assert.equal(JSON.parse(runStats(["--json"], dir, now)).volume.classified, 3);
-  assert.throws(() => runStats(["--days", "x"], dir, now), /usage/);
+  const options = { dir, now, pricing: DEFAULTS.pricing };
+  assert.match(runStats(["--days", "7"], options), /classified 2/);
+  assert.equal(JSON.parse(runStats(["--json"], options)).volume.classified, 3);
+  assert.throws(() => runStats(["--days", "x"], options), /usage/);
 });
 
 test("createBufferedLog keeps events already on disk", async () => {
@@ -139,14 +140,15 @@ test("createBufferedLog keeps events already on disk", async () => {
 
 test("summarize keeps spawn decisions out of turns and measures gate skips against hook turns", () => {
   const at = "2026-11-04T00:00:00Z";
+  const mod = { at, origin: "mod" };
   const s = summarize([
     { at, event: "prompt", session: "h", provider: "jev", verdict: { placement: "inline" }, failures: [] },
     { at, event: "skip", reason: "gate", session: "h" },
-    { at, event: "decision", trigger: "submit", session: "m", provider: "jev", verdict: { placement: "inline" }, failures: [] },
-    { at, event: "decision", trigger: "spawn", session: "m", provider: "jev", verdict: { placement: "inline" }, failures: [] },
-    { at, event: "manual", session: "m" },
-    { at, event: "decision", trigger: "submit", session: "n", provider: "jev", verdict: { placement: "inline" }, failures: [] },
-  ]);
+    { ...mod, event: "decision", trigger: "submit", session: "m", provider: "jev", verdict: { placement: "inline" }, failures: [] },
+    { ...mod, event: "decision", trigger: "spawn", session: "m", provider: "jev", verdict: { placement: "inline" }, failures: [] },
+    { ...mod, event: "manual", session: "m" },
+    { ...mod, event: "decision", trigger: "submit", session: "n", provider: "jev", verdict: { placement: "inline" }, failures: [] },
+  ], DEFAULTS.pricing);
   assert.equal(s.volume.turns, 4);
   assert.equal(s.volume.gateSkipRate, 0.5);
   assert.equal(s.outcomes.manualOverrideRate, 0.5);
@@ -157,7 +159,7 @@ test("a heuristic provider under a custom name is counted as heuristic", () => {
   const s = summarize([
     { at, event: "prompt", provider: "rules", heuristic: true, verdict: { placement: "inline", confidence: 0.5 }, failures: [] },
     { at, event: "prompt", provider: "jev", heuristic: false, verdict: { placement: "inline", confidence: 0.9 }, failures: [] },
-  ]);
+  ], DEFAULTS.pricing);
   assert.equal(s.health.heuristicRate, 0.5);
   assert.equal(s.verdicts.meanConfidence, 0.9);
 });
@@ -168,7 +170,7 @@ test("summarize counts hook crashes by hook and message", () => {
     { at, event: "crash", hook: "prompt-submit", error: "boom" },
     { at, event: "crash", hook: "prompt-submit", error: "boom" },
     { at, event: "crash", hook: "agent-model", error: "bad" },
-  ]);
+  ], DEFAULTS.pricing);
   assert.deepEqual(s.health.hookCrashes, { "prompt-submit: boom": 2, "agent-model: bad": 1 });
   assert.match(formatSummary(s), /hook crashes 3/);
 });

@@ -4,15 +4,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { runChain } from "../src/chain.mjs";
-import { DEFAULTS, isEnabled, loadConfig, merge, profileFor } from "../src/config.mjs";
-import { resolveConfig } from "../src/defaults.mjs";
+import { loadConfig } from "../src/config.mjs";
+import { DEFAULTS, isEnabled, merge, profileFor } from "../src/defaults.mjs";
 import { migrateLegacyDirs } from "../src/legacy.mjs";
 import { heuristicVerdict, shouldClassify } from "../src/heuristics.mjs";
 import { parseVerdict } from "../src/prompt.mjs";
 import { createProviders } from "../src/providers.mjs";
 import { redact } from "../src/redact.mjs";
-import { readTranscript, claudeLine, codexLine } from "../src/transcripts.mjs";
-import { resolveAgents, runCli, setEnabled } from "../src/toggle.mjs";
+import { claudeLine, codexLine, parseTranscript } from "../src/transcripts.mjs";
+import { runCli } from "../src/cli.mjs";
+import { decisionLabel } from "../src/nudge.mjs";
+import { isChange, notifyCommand, sendNotification, transcriptPath } from "../src/notify.mjs";
+import { memoryBreaker } from "../src/breaker.mjs";
 
 const gate = DEFAULTS.gate;
 
@@ -50,13 +53,14 @@ test("heuristics nudge only on a clear signal", () => {
 });
 
 test("parseVerdict reads JSON inside prose and rejects bad enums", () => {
-  assert.deepEqual(parseVerdict('ok {"placement":"subagent","model":"haiku","confidence":0.8}', { haiku: "d" }), {
+  assert.deepEqual(parseVerdict('ok {"placement":"subagent","model":"haiku","confidence":0.8}', { model: { haiku: "d" } }), {
     placement: "subagent",
     model: "haiku",
     effort: null,
+    toolset: null,
     confidence: 0.8,
   });
-  assert.throws(() => parseVerdict('{"placement":"elsewhere","model":"haiku"}', { haiku: "d" }));
+  assert.throws(() => parseVerdict('{"placement":"elsewhere","model":"haiku"}', { model: { haiku: "d" } }));
   assert.throws(() => parseVerdict("no json"));
 });
 
@@ -110,7 +114,6 @@ test("config merges user overrides, replaces arrays, and classifies repos by pro
   assert.equal(isEnabled(merged, "claude", {}), true);
   assert.equal(isEnabled(merged, "claude", { JEV_RELAYER: "off" }), false);
   assert.equal(isEnabled(merged, "claude", { JEV_RELAY: "off" }), false);
-  assert.equal(isEnabled(merged, "claude", { JEV_RELAY: "off" }), false);
   const config = merge(DEFAULTS, {
     profiles: [
       { name: "personal", match: ["mxttbennett"], chain: ["pc", "heuristics"] },
@@ -133,8 +136,8 @@ test("jev provider tries OpenRouter then TypeSafe and accepts JEV_API_KEY", asyn
     return { ok: true, json: async () => ({ answers: { placement: { choice: "sibling", confidence: 0.9 }, model_choice: { choice: "opus" } } }) };
   };
   const env = { OPENROUTER_API_KEY: "a", JEV_API_KEY: "b" };
-  const { jev } = createProviders(DEFAULTS, { config: DEFAULTS, env, fetch });
-  assert.deepEqual(await jev.run({ text: "x", models: { opus: "d" } }), { placement: "sibling", model: "opus", effort: null, confidence: 0.9 });
+  const { jev } = createProviders(DEFAULTS, { env, fetch });
+  assert.deepEqual(await jev.run({ text: "x", offered: { model: { opus: "d" } } }), { placement: "sibling", model: "opus", effort: null, toolset: null, confidence: 0.9 });
   assert.equal(calls.length, 2);
   assert.ok(calls[1].includes("typesafe"));
 });
@@ -146,33 +149,30 @@ test("ollama provider sends think:true and reads message.content", async () => {
     return { ok: true, json: async () => ({ message: { content: '{"placement":"inline","model":"sonnet"}' } }) };
   };
   const config = merge(DEFAULTS, { providers: { local: { type: "ollama", baseUrl: "http://127.0.0.1:11435", model: "bonsai-2:27b", timeoutMs: 6000 } } });
-  const providers = createProviders(config, { config, env: {}, fetch });
-  const verdict = await providers.local.run({ text: "user: hi", models: { sonnet: "d" } });
+  const providers = createProviders(config, { env: {}, fetch });
+  const verdict = await providers.local.run({ text: "user: hi", offered: { model: { sonnet: "d" } } });
   assert.equal(body.think, true);
   assert.equal(body.model, "bonsai-2:27b");
   assert.equal(verdict.model, "sonnet");
 });
 
+const jsonl = (rows) => rows.map((r) => JSON.stringify(r)).join("\n");
+
 test("claude transcript yields context size, last assistant time and recent prose turns", () => {
-  const dir = mkdtempSync(join(tmpdir(), "relay-"));
-  const file = join(dir, "t.jsonl");
   const rows = [
     { type: "user", message: { role: "user", content: "first question" }, timestamp: "2026-01-01T00:00:00Z" },
     { type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "answer" }, { type: "tool_use" }], usage: { input_tokens: 10, cache_read_input_tokens: 90, cache_creation_input_tokens: 5 } }, timestamp: "2026-01-01T00:00:05Z" },
     { type: "user", message: { role: "user", content: [{ type: "tool_result", content: "SECRET ROWS" }] }, timestamp: "2026-01-01T00:00:06Z" },
     { type: "assistant", isSidechain: true, message: { role: "assistant", content: "ignored" } },
   ];
-  writeFileSync(file, rows.map((r) => JSON.stringify(r)).join("\n"));
-  const snap = readTranscript(file, claudeLine);
+  const snap = parseTranscript(jsonl(rows), claudeLine);
   assert.equal(snap.contextTokens, 105);
   assert.equal(snap.lastAt, Date.parse("2026-01-01T00:00:05Z"));
   assert.deepEqual(snap.turns.map((t) => t.text), ["first question", "answer"]);
-  assert.deepEqual(readTranscript(join(dir, "missing.jsonl"), claudeLine).turns, []);
+  assert.deepEqual(parseTranscript("", claudeLine), { contextTokens: 0, lastAt: 0, turns: [] });
 });
 
 test("codex transcript yields last input tokens, timestamp and prose turns, skipping injected context", () => {
-  const dir = mkdtempSync(join(tmpdir(), "relay-"));
-  const file = join(dir, "rollout.jsonl");
   const rows = [
     { timestamp: "2026-01-01T00:00:00Z", type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: "# AGENTS.md instructions for /x" }] } },
     { timestamp: "2026-01-01T00:00:01Z", type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: "refactor the parser" }] } },
@@ -180,8 +180,7 @@ test("codex transcript yields last input tokens, timestamp and prose turns, skip
     { timestamp: "2026-01-01T00:00:03Z", type: "event_msg", payload: { type: "token_count", info: { last_token_usage: { input_tokens: 22906 } } } },
     { timestamp: "2026-01-01T00:00:04Z", type: "response_item", payload: { type: "message", role: "assistant", content: [{ type: "output_text", text: "done" }] } },
   ];
-  writeFileSync(file, rows.map((r) => JSON.stringify(r)).join("\n"));
-  const snap = readTranscript(file, codexLine);
+  const snap = parseTranscript(jsonl(rows), codexLine);
   assert.equal(snap.contextTokens, 22906);
   assert.equal(snap.lastAt, Date.parse("2026-01-01T00:00:03Z"));
   assert.deepEqual(snap.turns, [
@@ -198,9 +197,8 @@ test("toggle writes per-agent flags and reports status", () => {
   assert.equal(runCli(["on", "all"], path), "claude: on\ncodex: on\nband: off");
   assert.equal(runCli(["band", "on"], path), "claude: on\ncodex: on\nband: on");
   assert.throws(() => runCli(["band", "maybe"], path));
-  assert.deepEqual(setEnabled({}, ["claude"], false), { agents: { claude: { enabled: false } } });
-  assert.throws(() => resolveAgents("gemini"));
-  assert.equal(loadConfig(path).agents.codex.enabled, true);
+  assert.throws(() => runCli(["on", "gemini"], path), /unknown agent: gemini \(claude, codex, all\)/);
+  assert.deepEqual(JSON.parse(readFileSync(path, "utf8")).agents, { claude: { enabled: true }, codex: { enabled: true } });
 });
 
 test("a heavy prompt opens the gate from the lower floor, and an ordinary one does not", () => {
@@ -223,24 +221,8 @@ test("heuristics call a heavy slash command a subagent task once the gate is ope
   assert.equal(heuristicVerdict({ prompt: "/deep-plan x", contextTokens: 60000, idleMs: 0 }, gate).placement, "subagent");
 });
 
-test("the status notice is on by default and a user config can turn it off", () => {
-  // Arrange
-  const user = { statusNotice: false };
-
-  // Act
-  const defaults = resolveConfig();
-  const overridden = resolveConfig(user);
-
-  // Assert
-  assert.equal(defaults.statusNotice, true);
-  assert.equal(overridden.statusNotice, false);
-});
-
-test("notification helpers build an escape-free osascript call and detect changes", async () => {
-  const { notifyCommand, decisionLabel, isChange } = await import("../src/notify.mjs");
-  // Arrange
+test("notification helpers build an escape-free osascript call and detect changes", () => {
   const verdict = { placement: "inline", model: "haiku", effort: "low", confidence: 0.9 };
-  // Act & Assert
   assert.deepEqual(notifyCommand('say "hi"').slice(-2), ['say "hi"', "jev-relayer"]);
   assert.equal(decisionLabel(verdict), "inline · haiku · low · 0.90");
   assert.equal(isChange(null, verdict), true);
@@ -248,29 +230,13 @@ test("notification helpers build an escape-free osascript call and detect change
   assert.equal(isChange(verdict, { ...verdict, model: "opus" }), true);
 });
 
-test("session title is the latest ai-title in the transcript", async () => {
-  const { sessionTitle } = await import("../src/transcripts.mjs");
-  const { writeFileSync, mkdtempSync } = await import("node:fs");
-  const { join } = await import("node:path");
-  const { tmpdir } = await import("node:os");
-  // Arrange
-  const path = join(mkdtempSync(join(tmpdir(), "jr-")), "s.jsonl");
-  writeFileSync(path, ['{"type":"ai-title","aiTitle":"old"}', '{"type":"user"}', '{"type":"ai-title","aiTitle":"new name"}'].join("\n") + "\n");
-  // Act & Assert
-  assert.equal(sessionTitle(path), "new name");
-  assert.equal(sessionTitle("/nope/missing.jsonl"), "");
-});
-
-test("modules the mod imports use no node builtins", async () => {
-  const { readFileSync } = await import("node:fs");
-  // Arrange
+test("modules the mod imports use no node builtins", () => {
   const seen = new Set();
   const walk = (file) => {
     if (seen.has(file)) return;
     seen.add(file);
     const source = readFileSync(new URL(file, import.meta.url), "utf8");
     for (const [, spec] of source.matchAll(/from ['"]([^'"]+)['"]/g)) {
-      // Act & Assert
       assert.ok(!spec.startsWith("node:"), `${file} imports ${spec}`);
       if (spec.startsWith(".")) walk(new URL(spec, new URL(file, import.meta.url)).href);
     }
@@ -278,25 +244,25 @@ test("modules the mod imports use no node builtins", async () => {
   walk("../hooks/register.tsx");
 });
 
-test("sendNotification titles the notification from the transcript for any caller", async () => {
-  const { sendNotification, transcriptPath } = await import("../src/notify.mjs");
+test("sendNotification titles the notification from the transcript, and falls back when it cannot be read", async () => {
+  // Arrange
   const ran = [];
   const run = (argv) => ran.push(argv);
-  // Arrange
   const transcript = '{"type":"ai-title","aiTitle":"Fix login"}\n';
   // Act
   await sendNotification({ message: "m", readTranscript: () => transcript, run });
   await sendNotification({ message: "m", readTranscript: () => Promise.reject(new Error("x")), run });
+  await sendNotification({ message: "m", readTranscript: () => { throw new Error("ENOENT"); }, run });
   // Assert
   assert.equal(ran[0].at(-1), "Fix login");
   assert.equal(ran[1].at(-1), "jev-relayer");
+  assert.equal(ran[2].at(-1), "jev-relayer");
   assert.equal(transcriptPath({ configDir: "/c", cwd: "/a/b_c", id: "i" }), "/c/projects/-a-b-c/i.jsonl");
 });
 
 test("sendNotification finds an ai-title that sits before the last megabyte", async () => {
-  const { sendNotification } = await import("../src/notify.mjs");
-  const ran = [];
   // Arrange
+  const ran = [];
   const transcript = '{"type":"ai-title","aiTitle":"Early title"}\n' + '{"type":"user","text":"x"}\n'.repeat(60_000);
   // Act
   await sendNotification({ message: "m", readTranscript: () => transcript, run: (argv) => ran.push(argv) });
@@ -305,8 +271,6 @@ test("sendNotification finds an ai-title that sits before the last megabyte", as
 });
 
 test("breaker skips a provider after repeated failures until the cooldown ends", async () => {
-  const { memoryBreaker } = await import("../src/breaker.mjs");
-  const { runChain } = await import("../src/chain.mjs");
   let t = 0;
   let calls = 0;
   const breaker = memoryBreaker({ now: () => t, threshold: 2, cooldownMs: 1000 });

@@ -17,8 +17,9 @@ function engine(scenario: Scenario, verdict: Verdict, overrides: Record<string, 
   const sessionId = `s${++sessions}`
   const files = new Map<string, string>()
   const statuses: string[] = []
+  const vars: Record<string, string> = { HOME: '/home/t', OPENROUTER_API_KEY: 'k', ...overrides.vars }
   const $: any = {
-    env: { get: async (key: string) => ({ HOME: '/home/t', OPENROUTER_API_KEY: 'k' })[key] },
+    env: { get: async (key: string) => vars[key] },
     fs: {
       read: async (path: string) => {
         if (files.has(path)) return files.get(path)
@@ -319,8 +320,33 @@ describe('subagent model in the mod', () => {
     // Arrange
     const { $ } = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku' })
     await startSession($)
-    // Act & Assert
     expect((await spawn($, { prompt: 'p', model: 'opus' })).model).toBe('opus')
     expect((await spawn($, { prompt: 'p', fork: true })).model).toBeUndefined()
+  })
+})
+
+describe('provider settings in the mod', () => {
+  test('an openai-compat provider sends the key named by its apiKeyEnv', async () => {
+    // Arrange
+    const headers: any[] = []
+    const config = JSON.stringify({
+      chain: ['local'],
+      providers: { local: { type: 'openai-compat', baseUrl: 'http://pc', model: 'qwen', apiKeyEnv: 'PC_KEY', timeoutMs: 1000 } },
+    })
+    const { $ } = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku' }, {
+      files: { '/home/t/.config/jev-relayer/config.json': config },
+      vars: { PC_KEY: 'secret' },
+      http: {
+        fetch: async (_url: string, init: any) => {
+          headers.push(init.headers)
+          return { ok: true, status: 200, text: JSON.stringify({ choices: [{ message: { content: '{"placement":"inline","model":"haiku"}' } }] }) }
+        },
+      },
+    })
+    await startSession($)
+    // Act
+    await typedTurn($, 'rename the variable', 't1')
+    // Assert
+    expect(headers[0].Authorization).toBe('Bearer secret')
   })
 })

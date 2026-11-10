@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { migrateLegacyDirs } from "../src/legacy.mjs";
-import { runCli } from "../src/toggle.mjs";
+import { runCli } from "../src/cli.mjs";
 
 migrateLegacyDirs();
 

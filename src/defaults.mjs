@@ -10,7 +10,7 @@ const CODEX_MODELS = { "gpt-6-luna": FAST, "gpt-6.1-terra": BALANCED, "gpt-6.1-s
 
 const KNOWN_MODELS = { ...CLAUDE_MODELS, ...CODEX_MODELS };
 
-export function describeModels(models) {
+function describeModels(models) {
   const entries = Array.isArray(models) ? models.map((name) => [name, ""]) : Object.entries(models);
   return Object.fromEntries(entries.map(([name, why]) => [name, why || KNOWN_MODELS[name] || ""]));
 }
@@ -69,21 +69,26 @@ export function merge(base, override) {
   return out;
 }
 
+const REPLACED_LISTS = ["efforts", "toolsets"];
+const UNIT_INTERVAL = ["minConfidence", "siblingMinConfidence"];
+
 export function resolveConfig(user = {}) {
   const config = merge(DEFAULTS, user);
-  if (!(config.minConfidence >= 0 && config.minConfidence <= 1)) config.minConfidence = DEFAULTS.minConfidence;
-  if (!(config.siblingMinConfidence >= 0 && config.siblingMinConfidence <= 1)) config.siblingMinConfidence = DEFAULTS.siblingMinConfidence;
+  for (const key of UNIT_INTERVAL) if (!(config[key] >= 0 && config[key] <= 1)) config[key] = DEFAULTS[key];
+  for (const key of REPLACED_LISTS) if (user[key]) config[key] = user[key];
   const written = Object.entries(user.models ?? {}).map(([agent, models]) => [agent, describeModels(models)]);
   config.models = { ...DEFAULTS.models, ...Object.fromEntries(written) };
-  if (user.efforts) config.efforts = user.efforts;
-  if (user.toolsets) config.toolsets = user.toolsets;
   return config;
 }
 
+export const OFF_SWITCHES = ["JEV_RELAYER", "JEV_RELAY"];
+
 export function isEnabled(config, agent, env = {}) {
-  if (env.JEV_RELAYER === "off" || env.JEV_RELAY === "off") return false;
+  if (OFF_SWITCHES.some((name) => env[name] === "off")) return false;
   return config.agents[agent]?.enabled !== false;
 }
+
+export const gitOriginArgv = (cwd) => ["git", "-C", cwd, "remote", "get-url", "origin"];
 
 export function profileFor(config, cwd, remoteOf) {
   const remote = cwd ? remoteOf(cwd) : "";

@@ -15,7 +15,6 @@ test("uses the first non-empty line of the prompt", () => {
 });
 
 test("collapses inner whitespace", () => {
-  // Act & Assert
   assert.equal(taskLabel("rename   the\tconfig  key"), "rename the config key");
 });
 
@@ -29,19 +28,16 @@ test("truncates long prompts with an ellipsis", () => {
 });
 
 test("falls back to a generic label for blank prompts", () => {
-  // Act & Assert
   assert.equal(taskLabel("   \n "), "Background task");
   assert.equal(taskLabel(undefined), "Background task");
 });
 
 test("toVerdict keeps a trimmed title and omits a blank one", () => {
-  // Act & Assert
   assert.equal(toVerdict({ placement: "subagent", title: "  Fix login test " }).title, "Fix login test");
   assert.equal("title" in toVerdict({ placement: "subagent", title: "  " }), false);
   assert.equal("title" in toVerdict({ placement: "subagent" }), false);
 });
 
 test("classifierPrompt asks for a title", () => {
-  // Act & Assert
-  assert.match(classifierPrompt({ text: "x" }), /"title":"\.\.\."/);
+  assert.match(classifierPrompt("x"), /"title":"\.\.\."/);
 });

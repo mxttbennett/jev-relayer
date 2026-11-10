@@ -7,11 +7,6 @@ export const notifyCommand = (message, title = "jev-relayer") => [
   title,
 ];
 
-export const decisionLabel = ({ placement, model, effort, confidence }) =>
-  [placement, [model, effort].filter(Boolean).join(" · "), confidence == null ? null : confidence.toFixed(2)]
-    .filter(Boolean)
-    .join(" · ");
-
 export const isChange = (prev, next) => !prev || prev.model !== next.model || prev.placement !== next.placement;
 
 export function titleFromTranscript(text) {
@@ -27,7 +22,9 @@ export const transcriptPath = ({ configDir, cwd, id }) =>
   `${configDir}/projects/${cwd.replace(/[^a-zA-Z0-9]/g, "-")}/${id}.jsonl`;
 
 export async function sendNotification({ message, readTranscript, run }) {
-  const text = await Promise.resolve(readTranscript()).catch(() => "");
+  const text = await Promise.resolve().then(readTranscript).catch(() => "");
   const title = titleFromTranscript(String(text));
-  await Promise.resolve(run(notifyCommand(message, title || "jev-relayer"))).catch(() => {});
+  await Promise.resolve()
+    .then(() => run(notifyCommand(message, title || "jev-relayer")))
+    .catch(() => {});
 }

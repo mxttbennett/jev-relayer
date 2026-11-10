@@ -1,11 +1,10 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { loadConfig } from "./config.mjs";
 import { costSummary } from "./cost.mjs";
+import { modLogDir } from "./paths.mjs";
 import { STATE_DIR } from "./state.mjs";
 
 const DAY_MS = 86_400_000;
-const MOD_EVENTS = new Set(["decision", "applied", "manual", "action", "spawn-model", "deadline-miss"]);
 const BUCKETS = [
   ["<0.5", (c) => c < 0.5],
   ["0.5-0.6", (c) => c < 0.6],
@@ -22,20 +21,26 @@ function readLines(path) {
   }
 }
 
+const parseLines = (path, extra) =>
+  readLines(path).flatMap((line) => {
+    try {
+      return [{ ...JSON.parse(line), ...extra }];
+    } catch {
+      return [];
+    }
+  });
+
 export function readEvents(dir = STATE_DIR, { days, now = Date.now() } = {}) {
   let modFiles = [];
   try {
-    modFiles = readdirSync(join(dir, "mod")).map((f) => join(dir, "mod", f));
+    modFiles = readdirSync(modLogDir(dir)).map((f) => join(modLogDir(dir), f));
   } catch {}
   const since = days ? now - days * DAY_MS : 0;
-  const events = [];
-  for (const line of [join(dir, "relay.log"), ...modFiles].flatMap(readLines)) {
-    try {
-      const entry = JSON.parse(line);
-      if (Date.parse(entry.at) >= since) events.push(entry);
-    } catch {}
-  }
-  return events.sort((a, b) => a.at.localeCompare(b.at));
+  const events = [
+    ...parseLines(join(dir, "relay.log"), {}),
+    ...modFiles.flatMap((file) => parseLines(file, { origin: "mod" })),
+  ];
+  return events.filter((entry) => Date.parse(entry.at) >= since).sort((a, b) => a.at.localeCompare(b.at));
 }
 
 export const percentile = (values, p) => {
@@ -56,14 +61,14 @@ const count = (items, key) => {
 const rate = (n, total) => (total ? Number((n / total).toFixed(3)) : null);
 const sorted = (obj) => Object.fromEntries(Object.entries(obj).sort((a, b) => b[1] - a[1]));
 
-export function summarize(events, pricing = loadConfig().pricing) {
+export function summarize(events, pricing) {
   const of = (name) => events.filter((e) => e.event === name);
   const decisions = events.filter((e) => e.event === "prompt" || e.event === "decision");
   const hookPrompts = of("prompt");
   const skips = of("skip");
   const modTurns = of("decision").filter((e) => e.trigger !== "spawn");
   const isHeuristic = (e) => e.heuristic ?? (e.provider == null || e.provider === "heuristics");
-  const modSessions = new Set(events.filter((e) => MOD_EVENTS.has(e.event)).map((e) => e.session));
+  const modSessions = new Set(events.filter((e) => e.origin === "mod").map((e) => e.session));
   const agents = of("agent");
   const applied = of("applied");
   const actions = of("action");
@@ -219,11 +224,11 @@ export function formatSummary(s) {
   return lines.join("\n");
 }
 
-export function runStats(args, dir = STATE_DIR, now = Date.now()) {
+export function runStats(args, { pricing, dir = STATE_DIR, now = Date.now() }) {
   const json = args.includes("--json");
   const daysIndex = args.indexOf("--days");
   const days = daysIndex >= 0 ? Number(args[daysIndex + 1]) : undefined;
   if (daysIndex >= 0 && !(days > 0)) throw new Error("usage: jev-relayer stats [--days N] [--json]");
-  const summary = summarize(readEvents(dir, { days, now }));
+  const summary = summarize(readEvents(dir, { days, now }), pricing);
   return json ? JSON.stringify(summary, null, 2) : formatSummary(summary);
 }
