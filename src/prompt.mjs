@@ -35,6 +35,8 @@ const list = (criteria) =>
     .map(([name, why]) => `- ${name}: ${why}`)
     .join("\n");
 
+const questionKey = (key) => `${key}_choice`;
+
 const choicesIn = (offered) => OFFERED_CHOICES.filter(({ key }) => Object.keys(offered[key] ?? {}).length > 0);
 
 export const emptyVerdict = (placement, confidence = null) => ({
@@ -60,7 +62,7 @@ export function jevQuestions(offered = {}) {
     },
   };
   for (const { key, instructions } of choicesIn(offered)) {
-    questions[`${key}_choice`] = { type: "choice", instructions, criteria: offered[key] };
+    questions[questionKey(key)] = { type: "choice", instructions, criteria: offered[key] };
   }
   return questions;
 }
@@ -101,6 +103,16 @@ export function toVerdict(answer, offered = {}) {
     ...(title && { title }),
     confidence: typeof answer.confidence === "number" ? answer.confidence : null,
   };
+}
+
+export function verdictFromJev(answers = {}, offered = {}) {
+  const answer = {
+    placement: answers.placement?.choice,
+    agent: answers.agent_choice?.choice,
+    confidence: answers.placement?.confidence,
+  };
+  for (const { key } of OFFERED_CHOICES) answer[key] = answers[questionKey(key)]?.choice;
+  return toVerdict(answer, offered);
 }
 
 export function parseVerdict(text, offered = {}) {

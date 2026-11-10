@@ -22,3 +22,8 @@ export const AGENTS = {
 };
 
 export const agentNames = Object.keys(AGENTS);
+
+export function siblingFlags(agent, toolsetName, config, home) {
+  const toolset = toolsetName ? config.toolsets[toolsetName] : undefined;
+  return (toolset && AGENTS[agent].toolsetFlags?.(toolset, home)) || [];
+}

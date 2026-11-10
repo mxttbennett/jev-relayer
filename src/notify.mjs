@@ -9,7 +9,7 @@ export const notifyCommand = (message, title = "jev-relayer") => [
 
 export const isChange = (prev, next) => !prev || prev.model !== next.model || prev.placement !== next.placement;
 
-export function titleFromTranscript(text) {
+function titleFromTranscript(text) {
   const hit = text.split("\n").reverse().find((line) => line.includes('"ai-title"'));
   try {
     return hit ? JSON.parse(hit).aiTitle ?? "" : "";

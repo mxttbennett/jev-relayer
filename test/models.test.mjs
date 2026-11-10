@@ -7,7 +7,8 @@ import { loadConfig } from "../src/config.mjs";
 import { DEFAULTS, merge, resolveConfig } from "../src/defaults.mjs";
 import { classifierPrompt, jevQuestions, parseVerdict, toVerdict } from "../src/prompt.mjs";
 import { createProviders } from "../src/providers.mjs";
-import { classify, handlePrompt as run } from "../src/relay.mjs";
+import { classify } from "../src/classify.mjs";
+import { handlePrompt as run } from "../src/relay.mjs";
 
 const handlePrompt = async (args) => (await run(args))?.context ?? null;
 

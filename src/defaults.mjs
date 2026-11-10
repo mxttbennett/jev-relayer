@@ -82,6 +82,10 @@ export function resolveConfig(user = {}) {
 }
 
 export const OFF_SWITCHES = ["JEV_RELAYER", "JEV_RELAY"];
+const MODEL_OPTION_NAME = "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME";
+export const RELAY_ENV_NAMES = [...OFF_SWITCHES, MODEL_OPTION_NAME];
+
+export const isSelfRouted = (env) => env[MODEL_OPTION_NAME] === "Jev Router";
 
 export function isEnabled(config, agent, env = {}) {
   if (OFF_SWITCHES.some((name) => env[name] === "off")) return false;

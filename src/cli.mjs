@@ -1,27 +1,19 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { agentNames as AGENTS } from "./agents.mjs";
-import { CONFIG_PATH, loadConfig } from "./config.mjs";
+import { CONFIG_PATH, loadConfig, readUserConfig } from "./config.mjs";
 import { merge } from "./defaults.mjs";
 import { runStats } from "./stats.mjs";
 
-export function setEnabled(userConfig, agents, enabled) {
+function setEnabled(userConfig, agents, enabled) {
   const patch = Object.fromEntries(agents.map((agent) => [agent, { enabled }]));
   return merge(userConfig, { agents: patch });
 }
 
-export function resolveAgents(target) {
+function resolveAgents(target) {
   if (target === "all" || target === undefined) return AGENTS;
   if (!AGENTS.includes(target)) throw new Error(`unknown agent: ${target} (${[...AGENTS, "all"].join(", ")})`);
   return [target];
-}
-
-function readUser(path) {
-  try {
-    return JSON.parse(readFileSync(path, "utf8"));
-  } catch {
-    return {};
-  }
 }
 
 function writeUser(path, config) {
@@ -39,12 +31,12 @@ export function runCli(argv, path = CONFIG_PATH) {
   }
   if (command === "band") {
     if (target !== "on" && target !== "off") throw new Error("usage: jev-relayer band on|off");
-    writeUser(path, merge(readUser(path), { band: { enabled: target === "on" } }));
+    writeUser(path, merge(readUserConfig(path), { band: { enabled: target === "on" } }));
     return runCli(["status"], path);
   }
   if (command !== "on" && command !== "off") {
     throw new Error(`usage: jev-relayer status|stats|on|off [${[...AGENTS, "all"].join("|")}]|band on|off`);
   }
-  writeUser(path, setEnabled(readUser(path), resolveAgents(target), command === "on"));
+  writeUser(path, setEnabled(readUserConfig(path), resolveAgents(target), command === "on"));
   return runCli(["status"], path);
 }

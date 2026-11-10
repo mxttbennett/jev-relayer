@@ -5,10 +5,12 @@ import { configFile } from "./paths.mjs";
 
 export const CONFIG_PATH = configFile(homedir());
 
-export function loadConfig(path = CONFIG_PATH) {
-  let user = {};
+export function readUserConfig(path = CONFIG_PATH) {
   try {
-    user = JSON.parse(readFileSync(path, "utf8"));
-  } catch {}
-  return resolveConfig(user);
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return {};
+  }
 }
+
+export const loadConfig = (path = CONFIG_PATH) => resolveConfig(readUserConfig(path));

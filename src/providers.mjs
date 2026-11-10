@@ -1,5 +1,5 @@
 import { heuristicVerdict } from "./heuristics.mjs";
-import { classifierPrompt, jevQuestions, parseVerdict, toVerdict } from "./prompt.mjs";
+import { classifierPrompt, jevQuestions, parseVerdict, verdictFromJev } from "./prompt.mjs";
 
 const JEV_KEYS = ["OPENROUTER_API_KEY", "TYPESAFE_API_KEY", "JEV_API_KEY"];
 
@@ -87,17 +87,7 @@ const FACTORIES = {
           headers: { Authorization: `Bearer ${key}` },
           body: { state: { query: input.text }, model, questions: jevQuestions(input.offered) },
         });
-        return toVerdict(
-          {
-            placement: json.answers?.placement?.choice,
-            model: json.answers?.model_choice?.choice,
-            effort: json.answers?.effort_choice?.choice,
-            toolset: json.answers?.toolset_choice?.choice,
-            agent: json.answers?.agent_choice?.choice,
-            confidence: json.answers?.placement?.confidence,
-          },
-          input.offered,
-        );
+        return verdictFromJev(json.answers, input.offered);
       } catch (err) {
         lastError = new Error(`${name}: ${err.message}`);
       }

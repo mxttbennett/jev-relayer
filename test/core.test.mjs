@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { runChain } from "../src/chain.mjs";
 import { loadConfig } from "../src/config.mjs";
-import { DEFAULTS, isEnabled, merge, profileFor } from "../src/defaults.mjs";
+import { DEFAULTS, isEnabled, merge, profileFor, resolveConfig } from "../src/defaults.mjs";
 import { migrateLegacyDirs } from "../src/legacy.mjs";
 import { heuristicVerdict, shouldClassify } from "../src/heuristics.mjs";
 import { parseVerdict } from "../src/prompt.mjs";
@@ -86,24 +86,11 @@ test("chain falls through failures and flags degraded only when heuristics answe
   assert.equal(none.verdict.placement, "inline");
 });
 
-test("an out-of-range minConfidence falls back to the default", () => {
-  const dir = mkdtempSync(join(tmpdir(), "relay-"));
-  const file = join(dir, "config.json");
-  for (const bad of ["high", 1.5, -1]) {
-    writeFileSync(file, JSON.stringify({ minConfidence: bad }));
-    assert.equal(loadConfig(file).minConfidence, 0.6);
+test("an out-of-range confidence floor falls back to its default", () => {
+  for (const key of ["minConfidence", "siblingMinConfidence"]) {
+    for (const bad of ["high", 1.5, -1]) assert.equal(resolveConfig({ [key]: bad })[key], DEFAULTS[key]);
+    assert.equal(resolveConfig({ [key]: 0.7 })[key], 0.7);
   }
-  writeFileSync(file, JSON.stringify({ minConfidence: 0.8 }));
-  assert.equal(loadConfig(file).minConfidence, 0.8);
-});
-
-test("an out-of-range siblingMinConfidence falls back to the default", () => {
-  const dir = mkdtempSync(join(tmpdir(), "relay-"));
-  const file = join(dir, "config.json");
-  writeFileSync(file, JSON.stringify({ siblingMinConfidence: 2 }));
-  assert.equal(loadConfig(file).siblingMinConfidence, 0.85);
-  writeFileSync(file, JSON.stringify({ siblingMinConfidence: 0.7 }));
-  assert.equal(loadConfig(file).siblingMinConfidence, 0.7);
 });
 
 test("config merges user overrides, replaces arrays, and classifies repos by profile", () => {

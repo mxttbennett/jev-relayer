@@ -350,3 +350,18 @@ describe('provider settings in the mod', () => {
     expect(headers[0].Authorization).toBe('Bearer secret')
   })
 })
+
+describe('manual model choice in the mod', () => {
+  test('a new session routes again after /model stopped the previous one', async () => {
+    // Arrange
+    const { $, scenario } = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku' })
+    await startSession($)
+    scenario.model = 'sonnet'
+    await typedTurn($, 'rename the variable', 't1')
+    await startSession($)
+    // Act
+    const step = await typedTurn($, 'rename the variable', 't2')
+    // Assert
+    expect(step.model).toBe('haiku')
+  })
+})

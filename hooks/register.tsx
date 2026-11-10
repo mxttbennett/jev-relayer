@@ -1,12 +1,11 @@
 import type { EngineInterface, Register } from 'claude-code'
 
-import { AGENTS } from '../src/agents.mjs'
-import { OFF_SWITCHES, gitOriginArgv, isEnabled, resolveConfig } from '../src/defaults.mjs'
+import { AGENTS, siblingFlags } from '../src/agents.mjs'
+import { RELAY_ENV_NAMES, gitOriginArgv, isEnabled, isSelfRouted, resolveConfig } from '../src/defaults.mjs'
 import { parseEnv } from '../src/envfile.mjs'
-import { claudeToolsetFlags } from '../src/toolsets.mjs'
 import { createProviders, providerEnvNames } from '../src/providers.mjs'
 import { isChange, sendNotification, transcriptPath } from '../src/notify.mjs'
-import { classify, excerptOf } from '../src/relay.mjs'
+import { classify, excerptOf } from '../src/classify.mjs'
 import { appliedNotice, bandLabel, decisionLabel } from '../src/nudge.mjs'
 import { configFile, jevEnvFile, legacyConfigFile, modLogFile, stateDir } from '../src/paths.mjs'
 import { allowsInlineSwitch } from '../src/switching.mjs'
@@ -61,7 +60,7 @@ async function load($: EngineInterface) {
   } catch {
     state.jevEnv = {}
   }
-  const names = [...OFF_SWITCHES, ...providerEnvNames(state.config)]
+  const names = [...RELAY_ENV_NAMES, ...providerEnvNames(state.config)]
   const real = await Promise.all(names.map(async name => [name, await $.env.get(name)] as const))
   state.env = Object.fromEntries(real.filter(([, value]) => value))
 }
@@ -88,6 +87,11 @@ const withinDeadline = <T,>($: EngineInterface, pending: Promise<T> | undefined)
   Promise.race([pending, new Promise<typeof MISSED>(resolve => $.clock.after(DEADLINE_MS, () => resolve(MISSED)))])
 
 const isOn = () => isEnabled(state.config, 'claude', state.env)
+
+const logFailure = ($: EngineInterface, where: string) => (err: unknown) => {
+  void record($, { event: 'crash', hook: `mod ${where}`, error: String((err as Error)?.message ?? err) })
+  return null
+}
 
 async function publish($: EngineInterface, status: Record<string, unknown>) {
   try {
@@ -157,7 +161,7 @@ async function decide($: EngineInterface, prompt: string, trigger: string, isFir
 
 async function spawnSibling($: EngineInterface, prompt: string, model: string, toolset: string | null, title?: string) {
   const cwd = await $.session.cwd()
-  const flags = claudeToolsetFlags(toolset ? state.config.toolsets[toolset] : undefined, state.home)
+  const flags = siblingFlags('claude', toolset, state.config, state.home)
   try {
     const ran = await $.process.run([...AGENTS.claude.siblingArgv(model, flags), prompt], { cwd, timeoutMs: 30_000 })
     return ran.exitCode === 0
@@ -208,6 +212,7 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await load($)
     state.typedPrompts = 0
+    state.isManual = false
     state.lastStopAt = 0
     state.lastWasDowngrade = false
     state.siblingQuietUntil = 0
@@ -226,7 +231,7 @@ export const register: Register = on => {
       await publish($, { manual: true })
       return result
     }
-    state.pending.set(e.turnId, state.byText.get(e.text) ?? decide($, e.text, 'turn').catch(() => null))
+    state.pending.set(e.turnId, state.byText.get(e.text) ?? decide($, e.text, 'turn').catch(logFailure($, 'turn')))
     state.byText.delete(e.text)
     return result
   })
@@ -237,14 +242,14 @@ export const register: Register = on => {
     const isFirstPrompt = state.typedPrompts++ === 0
     if (state.lastWasDowngrade && isCorrection(e.text)) void record($, { event: 'regret' })
     state.lastWasDowngrade = false
-    const pending = decide($, e.text, 'submit', isFirstPrompt).catch(() => null)
+    const pending = decide($, e.text, 'submit', isFirstPrompt).catch(logFailure($, 'submit'))
     state.byText.set(e.text, pending)
     const decision = await withinDeadline($, pending)
     if (decision === MISSED) {
       state.missed.add(pending)
       void record($, { event: 'deadline-miss', where: 'submit', deadlineMs: DEADLINE_MS })
     }
-    const directive = decision && decision !== MISSED ? await act($, e.text, decision).catch(() => null) : null
+    const directive = decision && decision !== MISSED ? await act($, e.text, decision).catch(logFailure($, 'act')) : null
     return next(directive ? { ...e, context: [...(e.context ?? []), directive] } : e)
   })
 
@@ -321,8 +326,8 @@ export const register: Register = on => {
   })
 
   on('agent.spawn', async ($, e, next) => {
-    if (e.fork || e.model || !isOn()) return next(e)
-    const raced = await withinDeadline($, decide($, e.prompt, 'spawn').catch(() => null))
+    if (e.fork || e.model || !isOn() || isSelfRouted(state.env)) return next(e)
+    const raced = await withinDeadline($, decide($, e.prompt, 'spawn').catch(logFailure($, 'spawn')))
     const decision = raced === MISSED ? null : raced
     if (raced === MISSED) void record($, { event: 'deadline-miss', where: 'spawn', deadlineMs: DEADLINE_MS })
     void record($, { event: 'spawn-model', picked: decision?.model ?? null })

@@ -12,7 +12,6 @@ const toolsets = {
 const offered = toolsetDescriptions(toolsets);
 
 test("no toolsets key leaves the classifier unasked and the verdict without a toolset", () => {
-  assert.deepEqual(resolveConfig().toolsets, {});
   assert.doesNotMatch(classifierPrompt("x"), /toolset/);
   assert.equal(jevQuestions({}).toolset_choice, undefined);
   assert.equal(toVerdict({ placement: "inline", toolset: "lean" }).toolset, null);

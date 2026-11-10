@@ -6,7 +6,9 @@ function cleanText(text) {
   return trimmed && !INJECTED.test(trimmed) ? trimmed : "";
 }
 
-export function parseTranscript(text, parseLine, maxTurns = 3) {
+const RECENT_TURNS = 3;
+
+export function parseTranscript(text, parseLine) {
   const snapshot = { contextTokens: 0, lastAt: 0, turns: [] };
   for (const line of text.split("\n")) {
     let record;
@@ -22,7 +24,7 @@ export function parseTranscript(text, parseLine, maxTurns = 3) {
     const prose = cleanText(parsed.text);
     if (prose && parsed.role) snapshot.turns.push({ role: parsed.role, text: prose });
   }
-  snapshot.turns = snapshot.turns.slice(-maxTurns);
+  snapshot.turns = snapshot.turns.slice(-RECENT_TURNS);
   return snapshot;
 }
 

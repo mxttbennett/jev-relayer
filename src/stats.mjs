@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { costSummary } from "./cost.mjs";
-import { modLogDir } from "./paths.mjs";
+import { modLogDir, relayLogFile } from "./paths.mjs";
 import { STATE_DIR } from "./state.mjs";
 
 const DAY_MS = 86_400_000;
@@ -30,14 +30,14 @@ const parseLines = (path, extra) =>
     }
   });
 
-export function readEvents(dir = STATE_DIR, { days, now = Date.now() } = {}) {
+export function readEvents(dir, { days, now = Date.now() } = {}) {
   let modFiles = [];
   try {
     modFiles = readdirSync(modLogDir(dir)).map((f) => join(modLogDir(dir), f));
   } catch {}
   const since = days ? now - days * DAY_MS : 0;
   const events = [
-    ...parseLines(join(dir, "relay.log"), {}),
+    ...parseLines(relayLogFile(dir), {}),
     ...modFiles.flatMap((file) => parseLines(file, { origin: "mod" })),
   ];
   return events.filter((entry) => Date.parse(entry.at) >= since).sort((a, b) => a.at.localeCompare(b.at));

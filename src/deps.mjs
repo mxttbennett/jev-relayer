@@ -1,18 +1,18 @@
 import { closeSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import { AGENTS } from "./agents.mjs";
 import { createBreaker } from "./breaker.mjs";
 import { gitOriginArgv } from "./defaults.mjs";
 import { parseEnv } from "./envfile.mjs";
-import { jevEnvFile } from "./paths.mjs";
+import { breakerFile, jevEnvFile } from "./paths.mjs";
 import { createProviders } from "./providers.mjs";
 import { STATE_DIR, createStateStore } from "./state.mjs";
 import { parseTranscript } from "./transcripts.mjs";
 
 const TAIL_BYTES = 1_000_000;
-const BREAKER_FILE = join(STATE_DIR, "breaker.json");
+const BREAKER_FILE = breakerFile(STATE_DIR);
 
 function readTail(path) {
   try {
