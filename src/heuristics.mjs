@@ -19,7 +19,7 @@ const isHeavy = (prompt, gate) => matches(gate.heavyPatterns, prompt ?? "");
 
 export const cacheExpired = (idleMs, gate) => idleMs >= gate.cacheTtlMs;
 
-export function contextOpensGate({ contextTokens, idleMs, prompt }, gate) {
+function contextOpensGate({ contextTokens, idleMs, prompt }, gate) {
   if (contextTokens >= gate.contextTokens) return true;
   if (cacheExpired(idleMs, gate) && contextTokens >= gate.coldMinTokens) return true;
   return contextTokens >= gate.heavyFloorTokens && isHeavy(prompt, gate);

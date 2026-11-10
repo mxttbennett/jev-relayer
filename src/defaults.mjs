@@ -81,7 +81,7 @@ export function resolveConfig(user = {}) {
   return config;
 }
 
-export const OFF_SWITCHES = ["JEV_RELAYER", "JEV_RELAY"];
+const OFF_SWITCHES = ["JEV_RELAYER", "JEV_RELAY"];
 const MODEL_OPTION_NAME = "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME";
 export const RELAY_ENV_NAMES = [...OFF_SWITCHES, MODEL_OPTION_NAME];
 

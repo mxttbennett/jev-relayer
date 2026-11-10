@@ -80,23 +80,19 @@ export function summarize(events, pricing) {
   for (const name of Object.keys(count(decisions, (e) => e.provider))) {
     const answered = decisions.filter((e) => e.provider === name);
     const ms = answered.map((e) => e.providerMs).filter((v) => v != null);
-    const attempts = answered.length + decisions.flatMap((e) => e.failures ?? []).filter((f) => f.name === name).length;
+    const failures = decisions.flatMap((e) => e.failures ?? []).filter((f) => f.name === name).length;
     providerStats[name] = {
       answered: answered.length,
-      answerRate: rate(answered.length, attempts),
+      answerRate: rate(answered.length, answered.length + failures),
       p50Ms: percentile(ms, 50),
       p95Ms: percentile(ms, 95),
+      failures,
     };
   }
   const failureCounts = count(
     decisions.flatMap((e) => e.failures ?? []),
     (f) => `${f.name}: ${f.error}`,
   );
-  for (const [name, entry] of Object.entries(providerStats)) {
-    entry.failures = Object.values(
-      Object.fromEntries(Object.entries(failureCounts).filter(([k]) => k.startsWith(`${name}:`))),
-    ).reduce((a, b) => a + b, 0);
-  }
 
   const lat = decisions.map((e) => e.latencyMs).filter((v) => v != null);
   const conf = withConfidence.map((e) => (e.rawVerdict ?? e.verdict).confidence);
