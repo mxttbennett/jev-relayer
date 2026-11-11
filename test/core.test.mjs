@@ -10,6 +10,7 @@ import { migrateLegacyDirs } from "../src/legacy.mjs";
 import { heuristicVerdict, shouldClassify } from "../src/heuristics.mjs";
 import { parseVerdict } from "../src/prompt.mjs";
 import { createProviders } from "../src/providers.mjs";
+import { defaultDeps } from "../src/deps.mjs";
 import { redact } from "../src/redact.mjs";
 import { claudeLine, codexLine, parseTranscript } from "../src/transcripts.mjs";
 import { runCli } from "../src/cli.mjs";
@@ -165,6 +166,15 @@ test("apple provider throws when the helper fails so the chain moves on", async 
   const config = merge(DEFAULTS, { providers: { apple: { type: "apple" } } });
   const { apple } = createProviders(config, { env: {}, run: async () => ({ exitCode: 69, stdout: "" }) });
   await assert.rejects(apple.run({ text: "user: hi", offered: {} }), /exited 69/);
+});
+
+test("apple provider runs the helper as a real process through the default deps", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "jev-apple-"));
+  const ok = join(dir, "ok");
+  writeFileSync(ok, `#!/bin/sh\necho '{"placement":"inline","agent":"Plan","title":"t","confidence":0.5}'\n`, { mode: 0o755 });
+  const providersFor = (binary) => defaultDeps("claude", merge(DEFAULTS, { providers: { apple: { type: "apple", binary, timeoutMs: 5000 } } })).providers;
+  assert.equal((await providersFor(ok).apple.run({ text: "user: hi", offered: {} })).placement, "inline");
+  await assert.rejects(providersFor("/usr/bin/false").apple.run({ text: "user: hi", offered: {} }), /exited 1/);
 });
 
 const jsonl = (rows) => rows.map((r) => JSON.stringify(r)).join("\n");
