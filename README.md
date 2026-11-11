@@ -175,8 +175,7 @@ or later with Apple Intelligence turned on.
    ```
 
 - Guided generation limits each answer to the offered choices, so the reply always parses.
-- The model's context window is about 4k tokens. The provider sends only the last `maxChars`
-  (6000) characters of the excerpt.
+- The model's context window is about 4k tokens. The 6000-character excerpt every provider gets fits in it.
 - It counts as local. Prompts never leave the Mac.
 - If Apple Intelligence is off, the helper is missing or the model refuses, the chain moves on.
 - `binary` overrides the helper path.
