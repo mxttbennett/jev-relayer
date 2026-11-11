@@ -1,11 +1,13 @@
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { relayLogFile, sessionsDir, stateDir } from "./paths.mjs";
 
-export const STATE_DIR = join(homedir(), ".local", "state", "jev-relayer");
+export const STATE_DIR = stateDir(homedir());
 
-export function createStateStore(dir = STATE_DIR) {
-  const file = (id) => join(dir, "sessions", `${String(id).replace(/[^\w-]/g, "_")}.json`);
+export function createStateStore() {
+  const sessions = sessionsDir(STATE_DIR);
+  const file = (id) => join(sessions, `${String(id).replace(/[^\w-]/g, "_")}.json`);
   return {
     load(id) {
       try {
@@ -16,15 +18,15 @@ export function createStateStore(dir = STATE_DIR) {
     },
     save(id, state) {
       try {
-        mkdirSync(join(dir, "sessions"), { recursive: true });
+        mkdirSync(sessions, { recursive: true });
         writeFileSync(file(id), JSON.stringify(state));
       } catch {}
     },
     log(entry) {
       try {
-        mkdirSync(dir, { recursive: true });
+        mkdirSync(STATE_DIR, { recursive: true });
         appendFileSync(
-          join(dir, "relay.log"),
+          relayLogFile(STATE_DIR),
           `${JSON.stringify({ at: new Date().toISOString(), ...entry })}\n`,
         );
       } catch {}

@@ -1,5 +1,7 @@
 import { heuristicVerdict } from "./heuristics.mjs";
-import { classifierPrompt, jevQuestions, parseVerdict, toVerdict } from "./prompt.mjs";
+import { classifierPrompt, jevQuestions, parseVerdict, verdictFromJev } from "./prompt.mjs";
+
+const JEV_KEYS = ["OPENROUTER_API_KEY", "TYPESAFE_API_KEY", "JEV_API_KEY"];
 
 async function request(fetchFn, url, { body, headers, timeoutMs }) {
   const res = await fetchFn(url, {
@@ -13,20 +15,20 @@ async function request(fetchFn, url, { body, headers, timeoutMs }) {
 }
 
 const FACTORIES = {
-  heuristics: (_cfg, ctx) => async (input) => heuristicVerdict(input, ctx.config.gate),
+  heuristics: (_cfg, ctx) => async (input) => heuristicVerdict(input, ctx.gate),
 
   ollama: (cfg, ctx) => async (input) => {
     const json = await request(ctx.fetch, `${cfg.baseUrl}/api/chat`, {
       timeoutMs: cfg.timeoutMs,
       body: {
         model: cfg.model,
-        messages: [{ role: "user", content: classifierPrompt(input) }],
+        messages: [{ role: "user", content: classifierPrompt(input.text, input.offered) }],
         think: true,
         stream: false,
         options: { temperature: 0.2, num_predict: cfg.numPredict ?? 4096 },
       },
     });
-    return parseVerdict(json.message?.content ?? "", input.models, input.efforts, input.toolsets);
+    return parseVerdict(json.message?.content ?? "", input.offered);
   },
 
   "openai-compat": (cfg, ctx) => async (input) => {
@@ -46,13 +48,13 @@ const FACTORIES = {
       headers,
       body: {
         model,
-        messages: [{ role: "user", content: classifierPrompt(input) }],
+        messages: [{ role: "user", content: classifierPrompt(input.text, input.offered) }],
         temperature: 0.1,
         max_tokens: 256,
         reasoning_effort: "none",
       },
     });
-    return parseVerdict(json.choices?.[0]?.message?.content ?? "", input.models, input.efforts, input.toolsets);
+    return parseVerdict(json.choices?.[0]?.message?.content ?? "", input.offered);
   },
 
   jev: (cfg, ctx) => async (input) => {
@@ -70,7 +72,7 @@ const FACTORIES = {
       },
     };
     const order = (cfg.order ?? ["openrouter", "typesafe"]).filter((name) => backends[name]?.key);
-    if (!order.length) throw new Error("no Jev key (OPENROUTER_API_KEY, TYPESAFE_API_KEY or JEV_API_KEY)");
+    if (!order.length) throw new Error(`no Jev key (${JEV_KEYS.slice(0, -1).join(", ")} or ${JEV_KEYS.at(-1)})`);
     let lastError;
     for (const name of order) {
       const { key, url, model } = backends[name];
@@ -78,21 +80,9 @@ const FACTORIES = {
         const json = await request(ctx.fetch, url, {
           timeoutMs: cfg.timeoutMs,
           headers: { Authorization: `Bearer ${key}` },
-          body: { state: { query: input.text }, model, questions: jevQuestions(input.models, input.efforts, input.toolsets) },
+          body: { state: { query: input.text }, model, questions: jevQuestions(input.offered) },
         });
-        return toVerdict(
-          {
-            placement: json.answers?.placement?.choice,
-            model: json.answers?.model_choice?.choice,
-            effort: json.answers?.effort_choice?.choice,
-            toolset: json.answers?.toolset_choice?.choice,
-            agent: json.answers?.agent_choice?.choice,
-            confidence: json.answers?.placement?.confidence,
-          },
-          input.models,
-          input.efforts,
-          input.toolsets,
-        );
+        return verdictFromJev(json.answers, input.offered);
       } catch (err) {
         lastError = new Error(`${name}: ${err.message}`);
       }
@@ -101,7 +91,8 @@ const FACTORIES = {
   },
 };
 
-export function createProviders(config, ctx) {
+export function createProviders(config, deps) {
+  const ctx = { ...deps, gate: config.gate };
   const providers = {};
   for (const [name, cfg] of Object.entries(config.providers)) {
     const factory = FACTORIES[cfg.type];

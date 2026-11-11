@@ -1,3 +1,5 @@
+import { emptyVerdict } from "./prompt.mjs";
+
 const FAN_OUT =
   /\b(find all|audit|review (the )?(whole|entire|all)|across (the )?(repo|codebase)|every (file|place|usage)|search (the )?(whole|entire)|investigate|survey)\b/i;
 const INDEPENDENT =
@@ -13,22 +15,21 @@ function matches(patterns, prompt) {
   });
 }
 
-export const isHeavy = (prompt, gate) => matches(gate.heavyPatterns, prompt ?? "");
+const isHeavy = (prompt, gate) => matches(gate.heavyPatterns, prompt ?? "");
 
-export function shouldClassify({ contextTokens, idleMs, prompt, priorPrompts = Infinity }, gate) {
-  if (priorPrompts < gate.earlyPrompts) return true;
+export const cacheExpired = (idleMs, gate) => idleMs >= gate.cacheTtlMs;
+
+function contextOpensGate({ contextTokens, idleMs, prompt }, gate) {
   if (contextTokens >= gate.contextTokens) return true;
-  if (idleMs >= gate.cacheTtlMs && contextTokens >= gate.coldMinTokens) return true;
+  if (cacheExpired(idleMs, gate) && contextTokens >= gate.coldMinTokens) return true;
   return contextTokens >= gate.heavyFloorTokens && isHeavy(prompt, gate);
 }
 
-export function heuristicVerdict({ prompt, contextTokens, idleMs, priorPrompts }, gate) {
-  const open = shouldClassify({ contextTokens, idleMs, prompt, priorPrompts }, gate);
-  if (open && INDEPENDENT.test(prompt)) {
-    return { placement: "sibling", model: null, effort: null, confidence: 0.5 };
-  }
-  if (open && (FAN_OUT.test(prompt) || isHeavy(prompt, gate))) {
-    return { placement: "subagent", model: null, effort: null, confidence: 0.5 };
-  }
-  return { placement: "inline", model: null, effort: null, confidence: 0.5 };
+export const shouldClassify = (signals, gate) => signals.priorPrompts < gate.earlyPrompts || contextOpensGate(signals, gate);
+
+export function heuristicVerdict(signals, gate) {
+  const open = contextOpensGate(signals, gate);
+  if (open && INDEPENDENT.test(signals.prompt)) return emptyVerdict("sibling", 0.5);
+  if (open && (FAN_OUT.test(signals.prompt) || isHeavy(signals.prompt, gate))) return emptyVerdict("subagent", 0.5);
+  return emptyVerdict("inline", 0.5);
 }

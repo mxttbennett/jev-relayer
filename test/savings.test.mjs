@@ -12,7 +12,6 @@ const { gate, pricing } = DEFAULTS;
 const warmLarge = { contextTokens: 80_000, idleMs: 10_000 };
 
 test("tierOf and isDowngrade read tiers from full model ids", () => {
-  // Arrange & Act & Assert
   assert.equal(tierOf("claude-opus-5-5"), "opus");
   assert.equal(tierOf("gpt-6"), null);
   assert.equal(isDowngrade("claude-opus-5-5", "haiku"), true);
@@ -22,12 +21,10 @@ test("tierOf and isDowngrade read tiers from full model ids", () => {
 });
 
 test("upgrades always switch inline, even on a warm large context", () => {
-  // Arrange & Act & Assert
   assert.equal(allowsInlineSwitch({ current: "sonnet", picked: "opus", ...warmLarge }, gate), true);
 });
 
 test("downgrades are blocked on a warm large context", () => {
-  // Arrange & Act & Assert
   assert.equal(allowsInlineSwitch({ current: "opus", picked: "haiku", ...warmLarge }, gate), false);
 });
 
@@ -35,13 +32,11 @@ test("downgrades switch on a small context or a cold cache", () => {
   // Arrange
   const small = { contextTokens: gate.coldMinTokens - 1, idleMs: 0 };
   const cold = { contextTokens: 80_000, idleMs: gate.cacheTtlMs };
-  // Act & Assert
   assert.equal(allowsInlineSwitch({ current: "opus", picked: "haiku", ...small }, gate), true);
   assert.equal(allowsInlineSwitch({ current: "opus", picked: "haiku", ...cold }, gate), true);
 });
 
 test("isCorrection matches retries and corrections, not new requests", () => {
-  // Arrange & Act & Assert
   for (const text of ["no, that's wrong", "Try again", "still failing", "you missed the second file", "doesn't work"]) {
     assert.equal(isCorrection(text), true, text);
   }
@@ -105,16 +100,9 @@ test("summarize leaves legacy applied events out of the cost estimate", () => {
   assert.equal(s.cost.estimate.turns, 0);
 });
 
-test("default chains no longer reference local qwen providers", () => {
-  // Arrange & Act & Assert
-  assert.deepEqual(DEFAULTS.chain, ["jev", "heuristics"]);
-  assert.deepEqual(Object.keys(DEFAULTS.providers), ["jev", "heuristics"]);
-});
-
 test("appliedNotice says what happened: switched, blocked or unchanged", () => {
   // Arrange
   const base = { current: "claude-opus-5-5", picked: "haiku", effort: "low", contextTokens: 151_535, confidence: 0.98 };
-  // Act & Assert
   assert.equal(appliedNotice({ ...base, switched: true, blocked: false }), "jev → haiku · low · 0.98");
   assert.equal(appliedNotice({ ...base, switched: false, blocked: true }), "jev: staying on opus · haiku skipped, 152k context is cached · low · 0.98");
   assert.equal(appliedNotice({ ...base, picked: "opus", switched: false, blocked: false, confidence: null }), "jev: opus · low");

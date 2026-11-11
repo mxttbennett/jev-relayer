@@ -1,4 +1,4 @@
-const FALLBACK = { placement: "inline", model: null, effort: null, confidence: null };
+import { emptyVerdict } from "./prompt.mjs";
 
 export async function runChain(names, providers, input, breaker) {
   const failures = [];
@@ -34,7 +34,7 @@ export async function runChain(names, providers, input, breaker) {
     }
   }
   return {
-    verdict: FALLBACK,
+    verdict: emptyVerdict("inline"),
     provider: null,
     heuristic: true,
     degraded: true,

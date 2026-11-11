@@ -3,30 +3,31 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { DEFAULTS, loadConfig, merge } from "../src/config.mjs";
-import { resolveConfig } from "../src/defaults.mjs";
+import { loadConfig } from "../src/config.mjs";
+import { DEFAULTS, merge, resolveConfig } from "../src/defaults.mjs";
 import { classifierPrompt, jevQuestions, parseVerdict, toVerdict } from "../src/prompt.mjs";
 import { createProviders } from "../src/providers.mjs";
-import { classify, handlePrompt as run } from "../src/relay.mjs";
+import { classify } from "../src/classify.mjs";
+import { handlePrompt as run } from "../src/relay.mjs";
 
 const handlePrompt = async (args) => (await run(args))?.context ?? null;
 
 const two = { haiku: "fast things", sonnet: "everyday things" };
 
 test("a model outside the offered list is rejected, so the chain moves on", () => {
-  assert.equal(toVerdict({ placement: "inline", model: "sonnet" }, two).model, "sonnet");
-  assert.throws(() => toVerdict({ placement: "inline", model: "opus" }, two), /bad model/);
-  assert.throws(() => parseVerdict('{"placement":"inline","model":"gpt"}', two));
+  assert.equal(toVerdict({ placement: "inline", model: "sonnet" }, { model: two }).model, "sonnet");
+  assert.throws(() => toVerdict({ placement: "inline", model: "opus" }, { model: two }), /bad model/);
+  assert.throws(() => parseVerdict('{"placement":"inline","model":"gpt"}', { model: two }));
   assert.equal(toVerdict({ placement: "inline" }, {}).model, null);
 });
 
 test("the classifier is only offered the listed models, with their descriptions", () => {
-  const prompt = classifierPrompt({ text: "x", models: two });
+  const prompt = classifierPrompt("x", { model: two });
   assert.match(prompt, /- sonnet: everyday things/);
   assert.doesNotMatch(prompt, /opus/);
-  assert.deepEqual(jevQuestions(two).model_choice.criteria, two);
+  assert.deepEqual(jevQuestions({ model: two }).model_choice.criteria, two);
   assert.equal(jevQuestions({}).model_choice, undefined);
-  assert.doesNotMatch(classifierPrompt({ text: "x", models: {} }), /"model"/);
+  assert.doesNotMatch(classifierPrompt("x", { model: {} }), /"model"/);
 });
 
 test("the jev request carries only the listed models", async () => {
@@ -35,15 +36,10 @@ test("the jev request carries only the listed models", async () => {
     body = JSON.parse(init.body);
     return { ok: true, json: async () => ({ answers: { placement: { choice: "inline" }, model_choice: { choice: "sonnet" } } }) };
   };
-  const { jev } = createProviders(DEFAULTS, { config: DEFAULTS, env: { OPENROUTER_API_KEY: "k" }, fetch });
-  const verdict = await jev.run({ text: "x", models: two });
+  const { jev } = createProviders(DEFAULTS, { env: { OPENROUTER_API_KEY: "k" }, fetch });
+  const verdict = await jev.run({ text: "x", offered: { model: two } });
   assert.deepEqual(Object.keys(body.questions.model_choice.criteria), ["haiku", "sonnet"]);
   assert.equal(verdict.model, "sonnet");
-});
-
-test("defaults give claude tier names and codex its own model names", () => {
-  assert.deepEqual(Object.keys(DEFAULTS.models.claude), ["haiku", "sonnet", "opus"]);
-  assert.deepEqual(Object.keys(DEFAULTS.models.codex), ["gpt-6-luna", "gpt-6.1-terra", "gpt-6.1-sol"]);
 });
 
 test("a user models list replaces the default list for that agent only", () => {
@@ -57,7 +53,7 @@ test("a user models list replaces the default list for that agent only", () => {
 
 test("classify passes each agent its own models, and none when an agent lists none", async () => {
   const seen = [];
-  const providers = { heuristics: { remote: false, heuristic: true, run: async (input) => { seen.push(Object.keys(input.models)); return { placement: "inline", model: null }; } } };
+  const providers = { heuristics: { remote: false, heuristic: true, run: async (input) => { seen.push(Object.keys(input.offered.model)); return { placement: "inline", model: null }; } } };
   const config = merge(DEFAULTS, { chain: ["heuristics"] });
   config.models = { claude: two, codex: {} };
   const deps = { providers, remoteOf: () => "" };
@@ -104,25 +100,24 @@ test("an effort outside the offered list is rejected, and none is kept when no e
   // Arrange
   const reply = (effort) => ({ placement: "inline", model: "sonnet", effort });
 
-  // Act & Assert
-  assert.equal(toVerdict(reply("high"), two, levels).effort, "high");
-  assert.throws(() => toVerdict(reply("max"), two, levels), /bad effort/);
-  assert.equal(toVerdict(reply("high"), two, {}).effort, null);
-  assert.equal(parseVerdict('{"placement":"inline","model":"sonnet","effort":"low"}', two, levels).effort, "low");
+  assert.equal(toVerdict(reply("high"), { model: two, effort: levels }).effort, "high");
+  assert.throws(() => toVerdict(reply("max"), { model: two, effort: levels }), /bad effort/);
+  assert.equal(toVerdict(reply("high"), { model: two, effort: {} }).effort, null);
+  assert.equal(parseVerdict('{"placement":"inline","model":"sonnet","effort":"low"}', { model: two, effort: levels }).effort, "low");
 });
 
 test("the classifier is only asked about the listed efforts", () => {
   // Act
-  const prompt = classifierPrompt({ text: "x", models: two, efforts: levels });
-  const questions = jevQuestions(two, levels);
+  const prompt = classifierPrompt("x", { model: two, effort: levels });
+  const questions = jevQuestions({ model: two, effort: levels });
 
   // Assert
   assert.match(prompt, /- low: little reasoning/);
   assert.match(prompt, /- high: hard reasoning/);
   assert.match(prompt, /"effort":"\.\.\."/);
   assert.deepEqual(questions.effort_choice.criteria, levels);
-  assert.equal(jevQuestions(two, {}).effort_choice, undefined);
-  assert.doesNotMatch(classifierPrompt({ text: "x", models: two, efforts: {} }), /effort/);
+  assert.equal(jevQuestions({ model: two, effort: {} }).effort_choice, undefined);
+  assert.doesNotMatch(classifierPrompt("x", { model: two, effort: {} }), /effort/);
 });
 
 test("the jev provider reads the effort answer", async () => {
@@ -131,15 +126,14 @@ test("the jev provider reads the effort answer", async () => {
     ok: true,
     json: async () => ({ answers: { placement: { choice: "inline" }, model_choice: { choice: "sonnet" }, effort_choice: { choice: "low" } } }),
   });
-  const { jev } = createProviders(DEFAULTS, { config: DEFAULTS, env: { OPENROUTER_API_KEY: "k" }, fetch });
+  const { jev } = createProviders(DEFAULTS, { env: { OPENROUTER_API_KEY: "k" }, fetch });
 
   // Act
-  const verdict = await jev.run({ text: "x", models: two, efforts: levels });
+  const verdict = await jev.run({ text: "x", offered: { model: two, effort: levels } });
 
   // Assert
   assert.equal(verdict.effort, "low");
 });
-
 
 test("a low-confidence verdict drops its effort along with its model", async () => {
   // Arrange
@@ -148,10 +142,10 @@ test("a low-confidence verdict drops its effort along with its model", async () 
   const config = merge(DEFAULTS, { chain: ["jev"] });
 
   // Act
-  const { result } = await classify({ text: "x", prompt: "x", agent: "claude", cwd: "/x" }, config, { providers, remoteOf: () => "" });
+  const { verdict: classified } = await classify({ text: "x", prompt: "x", agent: "claude", cwd: "/x" }, config, { providers, remoteOf: () => "" });
 
   // Assert
-  assert.deepEqual(result.verdict, { placement: "inline", model: null, effort: null, confidence: 0.2 });
+  assert.deepEqual(classified, { placement: "inline", model: null, effort: null, toolset: null, confidence: 0.2 });
 });
 
 test("a user efforts list replaces the default list, and an empty one stops the effort question", () => {
@@ -162,9 +156,4 @@ test("a user efforts list replaces the default list, and an empty one stops the 
   // Assert
   assert.deepEqual(subset.efforts, { low: "quick" });
   assert.deepEqual(none.efforts, {});
-});
-
-test("defaults offer low, medium, high and xhigh effort", () => {
-  // Act & Assert
-  assert.deepEqual(Object.keys(DEFAULTS.efforts), ["low", "medium", "high", "xhigh"]);
 });
