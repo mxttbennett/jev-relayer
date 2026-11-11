@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { runChain } from "../src/chain.mjs";
+import { excerptOf } from "../src/classify.mjs";
 import { loadConfig } from "../src/config.mjs";
 import { DEFAULTS, isEnabled, merge, profileFor, resolveConfig } from "../src/defaults.mjs";
 import { migrateLegacyDirs } from "../src/legacy.mjs";
@@ -324,4 +325,18 @@ test("legacy jev-relay config and state move to jev-relayer without overwriting 
   assert.equal(readFileSync(join(home, ".local", "state", "jev-relayer", "relay.log"), "utf8"), "new\n");
   assert.equal(readFileSync(join(home, ".local", "state", "jev-relayer", "mod", "s.jsonl"), "utf8"), "old-mod\n");
   assert.equal(existsSync(join(home, ".config", "jev-relay")), false);
+});
+
+test("excerpt keeps up to maxTurns earlier messages, newest first, within the character budget", () => {
+  const turns = [1, 2, 3, 4, 5].map((n) => ({ role: n % 2 ? "user" : "assistant", text: `turn ${n}` }));
+  assert.equal(excerptOf(turns, "now", 10), "user: turn 1\n\nassistant: turn 2\n\nuser: turn 3\n\nassistant: turn 4\n\nuser: turn 5\n\nuser: now");
+  assert.equal(excerptOf(turns, "now", 2), "assistant: turn 4\n\nuser: turn 5\n\nuser: now");
+  const long = Array.from({ length: 10 }, (_, n) => ({ role: "user", text: `${n}`.repeat(1500) }));
+  const excerpt = excerptOf(long, "now", 10);
+  assert.ok(excerpt.length <= 6000 && excerpt.endsWith("user: now") && excerpt.includes("9".repeat(1500)) && !excerpt.includes("6666"));
+});
+
+test("transcript keeps every prose turn so the early-prompt gate counts the whole session", () => {
+  const rows = [1, 2, 3, 4, 5].map((n) => ({ type: "user", message: { role: "user", content: `q${n}` } }));
+  assert.equal(parseTranscript(jsonl(rows), claudeLine).turns.length, 5);
 });
