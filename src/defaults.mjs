@@ -37,6 +37,7 @@ export const DEFAULTS = {
     sonnet: { input: 3, cacheRead: 0.3, cacheWrite: 3.75, output: 15 },
     opus: { input: 5, cacheRead: 0.5, cacheWrite: 6.25, output: 25 },
   },
+  excerptTurns: 10,
   minConfidence: 0.6,
   siblingMinConfidence: 0.85,
   band: { enabled: false },

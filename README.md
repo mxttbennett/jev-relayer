@@ -186,6 +186,8 @@ or later with Apple Intelligence turned on.
 - A redaction hit drops the remote provider for that prompt, so heuristics answer instead.
 - To keep a repo class off remote providers, set its chain to local providers and `heuristics`.
 - Tool results are never sent. Only prompts and assistant prose are.
+- The classifier sees your prompt and up to `excerptTurns` (10) earlier messages, newest first, until
+  the excerpt reaches 6000 characters. Each message is cut to 1500 characters.
 
 ## Configure
 

@@ -45,7 +45,7 @@ export async function handlePrompt({ input, agent, config, deps }) {
   const { verdict, heuristic, degraded, low, fields } = await classify(
     {
       isFirstPrompt: priorPrompts === 0,
-      text: excerptOf(snapshot.turns, input.prompt),
+      text: excerptOf(snapshot.turns, input.prompt, config.excerptTurns),
       prompt: input.prompt,
       agent,
       contextTokens,

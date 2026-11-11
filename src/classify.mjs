@@ -9,10 +9,17 @@ const TURN_CHARS = 1500;
 const TEXT_CHARS = 6000;
 const PROMPT_LOG_CHARS = 200;
 
-export function excerptOf(turns, prompt) {
+export function excerptOf(turns, prompt, maxTurns) {
   const earlier = turns.at(-1)?.role === "user" && turns.at(-1).text === prompt ? turns.slice(0, -1) : turns;
-  const lines = earlier.map((t) => `${t.role}: ${t.text.slice(0, TURN_CHARS)}`);
-  return [...lines, `user: ${prompt.slice(0, TURN_CHARS)}`].join("\n\n");
+  const lines = [`user: ${prompt.slice(0, TURN_CHARS)}`];
+  let used = lines[0].length;
+  for (const t of earlier.slice(-maxTurns).toReversed()) {
+    const line = `${t.role}: ${t.text.slice(0, TURN_CHARS)}`;
+    used += line.length + 2;
+    if (used > TEXT_CHARS) break;
+    lines.unshift(line);
+  }
+  return lines.join("\n\n");
 }
 
 function offeredChoices(config, agent) {
