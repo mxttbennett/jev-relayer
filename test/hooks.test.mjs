@@ -27,7 +27,7 @@ test("prompt-submit hook reads the transcript and injects a subagent nudge on a 
   const { dir, transcript } = home({ contextTokens: 150000 });
   const run = runHook("prompt-submit", dir, { session_id: "s", prompt: "audit the whole repo for leaks", cwd: dir, transcript_path: transcript });
   const output = JSON.parse(run.stdout);
-  assert.equal(output.systemMessage, "↪ jev-relayer: subagent · 0.50");
+  assert.equal(output.systemMessage, "↪ jev-relayer: subagent · 0.50 · via heuristics");
   assert.match(output.hookSpecificOutput.additionalContext, /conversation is large \(150k tokens\)/);
 });
 

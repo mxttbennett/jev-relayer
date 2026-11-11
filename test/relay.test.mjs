@@ -177,10 +177,10 @@ test("subagent model pick skips explicit models and forks, and classifies on a c
 
 test("each nudge carries a short user-facing notice, and the degraded warning has its own", async () => {
   const { deps, config } = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku" }, true), heuristics } });
-  assert.equal((await run({ input, agent: "claude", config, deps })).notice, "↪ jev-relayer: subagent · haiku");
+  assert.equal((await run({ input, agent: "claude", config, deps })).notice, "↪ jev-relayer: subagent · haiku · via jev");
 
   const sibling = setup({ providers: { jev: answer({ placement: "sibling", model: null }, true), heuristics }, snapshot: priorTurn });
-  assert.equal((await run({ input, agent: "claude", config: sibling.config, deps: sibling.deps })).notice, "↪ jev-relayer: sibling session");
+  assert.equal((await run({ input, agent: "claude", config: sibling.config, deps: sibling.deps })).notice, "↪ jev-relayer: sibling session · via jev");
 
   const down = setup({ providers: { jev: { remote: true, heuristic: false, run: async () => { throw new Error("x"); } }, heuristics } });
   assert.equal((await run({ input, agent: "claude", config: down.config, deps: down.deps })).notice, "⚠ jev-relayer: no classifier answered, using heuristics");
@@ -195,7 +195,7 @@ test("a low-confidence turn drops the cached model so the next pick is fresh", a
 
 test("notices show the verdict confidence when the classifier reports one", async () => {
   const sub = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku", confidence: 0.9 }, true), heuristics } });
-  assert.equal((await run({ input, agent: "claude", config: sub.config, deps: sub.deps })).notice, "↪ jev-relayer: subagent · haiku · 0.90");
+  assert.equal((await run({ input, agent: "claude", config: sub.config, deps: sub.deps })).notice, "↪ jev-relayer: subagent · haiku · 0.90 · via jev");
 });
 
 test("every-turn reporting says when a turn was skipped or cooling down", async () => {

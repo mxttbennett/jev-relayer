@@ -15,7 +15,7 @@ import { taskLabel } from '../src/task-label.mjs'
 import { memoryBreaker } from '../src/breaker.mjs'
 import { createBufferedLog } from '../src/buffered-log.mjs'
 
-type Decision = { placement: string; model: string | null; effort: string | null; toolset: string | null; agent?: string; title?: string; confidence: number | null }
+type Decision = { placement: string; model: string | null; effort: string | null; toolset: string | null; agent?: string; title?: string; confidence: number | null; provider?: string }
 type Vars = Record<string, string | undefined>
 
 const DEADLINE_MS = 4000
@@ -164,7 +164,7 @@ async function decide($: EngineInterface, prompt: string, trigger: string, isFir
   const changed = isChange(state.latest, verdict)
   state.latest = verdict
   if (state.config.macNotifications && changed) void notify($, decisionLabel(verdict))
-  return verdict
+  return { ...verdict, provider: fields.provider }
 }
 
 async function spawnSibling($: EngineInterface, prompt: string, model: string, toolset: string | null, title?: string) {
@@ -292,7 +292,7 @@ export const register: Register = on => {
     const wanted = decision?.placement === 'inline' ? decision.effort : null
     const effort = isEngineEffort(wanted) && e.effort !== undefined ? wanted : null
     if (e.index === 0 && state.config.statusNotice && decision && (picked || effort)) {
-      const text = appliedNotice({ current, picked, effort, switched: Boolean(model), blocked: wantsSwitch && !allowed, contextTokens, confidence: decision.confidence })
+      const text = appliedNotice({ current, picked, effort, switched: Boolean(model), blocked: wantsSwitch && !allowed, contextTokens, confidence: decision.confidence, provider: decision.provider })
       $.ui.log(text)
     }
     const stream = next(model || effort ? { ...e, ...(model && { model }), ...(effort && { effort }) } : e)

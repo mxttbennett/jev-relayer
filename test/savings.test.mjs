@@ -106,4 +106,5 @@ test("appliedNotice says what happened: switched, blocked or unchanged", () => {
   assert.equal(appliedNotice({ ...base, switched: true, blocked: false }), "jev → haiku · low · 0.98");
   assert.equal(appliedNotice({ ...base, switched: false, blocked: true }), "jev: staying on opus · haiku skipped, 152k context is cached · low · 0.98");
   assert.equal(appliedNotice({ ...base, picked: "opus", switched: false, blocked: false, confidence: null }), "jev: opus · low");
+  assert.equal(appliedNotice({ ...base, switched: true, blocked: false, provider: "apple" }), "jev → haiku · low · 0.98 · via apple");
 });

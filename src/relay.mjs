@@ -71,7 +71,7 @@ export async function handlePrompt({ input, agent, config, deps }) {
   const nudge = buildNudge(verdict, { agent, contextTokens, flags });
   if (nudge) {
     lines.push(nudge);
-    notices.push(buildNotice(verdict));
+    notices.push(buildNotice(verdict, fields.provider));
     state.nudge = { promptsSince: 0, tokens: contextTokens };
   } else {
     delete state.nudge;
