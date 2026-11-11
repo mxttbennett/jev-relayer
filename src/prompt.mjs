@@ -67,6 +67,12 @@ export function jevQuestions(offered = {}) {
   return questions;
 }
 
+export function choiceLists(offered = {}) {
+  const lists = { placement: Object.keys(PLACEMENTS), agent: Object.keys(SUBAGENT_TYPES) };
+  for (const { key } of choicesIn(offered)) lists[key] = Object.keys(offered[key]);
+  return lists;
+}
+
 export function classifierPrompt(text, offered = {}) {
   const choices = choicesIn(offered);
   const fields = ['"placement":"..."', '"agent":"..."', ...choices.map(({ key }) => `"${key}":"..."`)];

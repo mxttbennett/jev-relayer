@@ -143,6 +143,30 @@ test("ollama provider sends think:true and reads message.content", async () => {
   assert.equal(verdict.model, "sonnet");
 });
 
+test("apple provider sends the tail of the excerpt with every choice list and parses the helper's JSON", async () => {
+  let argv;
+  const run = async (args) => {
+    argv = args;
+    return { exitCode: 0, stdout: '{"placement":"subagent","agent":"Explore","model":"haiku","title":"Find exports","confidence":0.7}' };
+  };
+  const config = merge(DEFAULTS, { providers: { apple: { type: "apple", binary: "/bin/helper", maxChars: 10, timeoutMs: 8000 } } });
+  const { apple } = createProviders(config, { env: {}, run });
+  const verdict = await apple.run({ text: "x".repeat(50) + "user: tail", offered: { model: { haiku: "d" } } });
+  const request = JSON.parse(argv[1]);
+  assert.equal(argv[0], "/bin/helper");
+  assert.ok(request.prompt.endsWith("user: tail") && !request.prompt.includes("xx"));
+  assert.deepEqual(request.choices.model, ["haiku"]);
+  assert.deepEqual(request.choices.placement, ["inline", "subagent", "sibling"]);
+  assert.equal(apple.remote, false);
+  assert.deepEqual(verdict, { placement: "subagent", agent: "Explore", model: "haiku", effort: null, toolset: null, title: "Find exports", confidence: 0.7 });
+});
+
+test("apple provider throws when the helper fails so the chain moves on", async () => {
+  const config = merge(DEFAULTS, { providers: { apple: { type: "apple" } } });
+  const { apple } = createProviders(config, { env: {}, run: async () => ({ exitCode: 69, stdout: "" }) });
+  await assert.rejects(apple.run({ text: "user: hi", offered: {} }), /exited 69/);
+});
+
 const jsonl = (rows) => rows.map((r) => JSON.stringify(r)).join("\n");
 
 test("claude transcript yields context size, last assistant time and recent prose turns", () => {

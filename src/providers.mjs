@@ -1,5 +1,7 @@
 import { heuristicVerdict } from "./heuristics.mjs";
-import { classifierPrompt, jevQuestions, parseVerdict, verdictFromJev } from "./prompt.mjs";
+import { choiceLists, classifierPrompt, jevQuestions, parseVerdict, toVerdict, verdictFromJev } from "./prompt.mjs";
+
+const APPLE_BINARY = new URL("../apple/.build/jev-apple-classify", import.meta.url).pathname;
 
 const JEV_KEYS = ["OPENROUTER_API_KEY", "TYPESAFE_API_KEY", "JEV_API_KEY"];
 
@@ -55,6 +57,16 @@ const FACTORIES = {
       },
     });
     return parseVerdict(json.choices?.[0]?.message?.content ?? "", input.offered);
+  },
+
+  apple: (cfg, ctx) => async (input) => {
+    const excerpt = input.text.slice(-(cfg.maxChars ?? 6000));
+    const request = { prompt: classifierPrompt(excerpt, input.offered), choices: choiceLists(input.offered) };
+    const { stdout, exitCode } = await ctx.run([cfg.binary ?? APPLE_BINARY, JSON.stringify(request)], {
+      timeoutMs: cfg.timeoutMs,
+    });
+    if (exitCode !== 0) throw new Error(`apple helper exited ${exitCode}`);
+    return toVerdict(JSON.parse(stdout), input.offered);
   },
 
   jev: (cfg, ctx) => async (input) => {
