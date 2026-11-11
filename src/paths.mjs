@@ -1,4 +1,5 @@
 export const configDir = (home) => `${home}/.config/jev-relayer`;
+export const relayerEnvFile = (home) => `${configDir(home)}/.env`;
 export const configFile = (home) => `${configDir(home)}/config.json`;
 export const legacyConfigFile = (home) => `${home}/.config/jev-relay/config.json`;
 export const jevEnvFile = (home) => `${home}/.config/jev-opus/.env`;

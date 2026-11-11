@@ -4,8 +4,6 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { DEFAULTS, merge } from "../src/defaults.mjs";
-import { providerEnvNames } from "../src/providers.mjs";
 import { sameModel } from "../src/tiers.mjs";
 
 function home({ contextTokens }) {
@@ -46,7 +44,3 @@ test("sameModel matches a tier alias against a full model id, either way round",
   assert.equal(sameModel("haiku", "claude-opus-5-5"), false);
 });
 
-test("providerEnvNames includes each provider's apiKeyEnv", () => {
-  const config = merge(DEFAULTS, { providers: { pc: { type: "openai-compat", apiKeyEnv: "PC_KEY" } } });
-  assert.ok(providerEnvNames(config).includes("PC_KEY"));
-});

@@ -1,13 +1,13 @@
 import type { EngineInterface, Register } from 'claude-code'
 
 import { AGENTS, siblingFlags } from '../src/agents.mjs'
-import { RELAY_ENV_NAMES, gitOriginArgv, isEnabled, isSelfRouted, resolveConfig } from '../src/defaults.mjs'
+import { gitOriginArgv, isEnabled, isSelfRouted, resolveConfig } from '../src/defaults.mjs'
 import { parseEnv } from '../src/envfile.mjs'
-import { createProviders, providerEnvNames } from '../src/providers.mjs'
+import { createProviders } from '../src/providers.mjs'
 import { isChange, sendNotification, transcriptPath } from '../src/notify.mjs'
 import { classify, excerptOf } from '../src/classify.mjs'
 import { appliedNotice, bandLabel, decisionLabel } from '../src/nudge.mjs'
-import { configFile, jevEnvFile, legacyConfigFile, modLogFile, stateDir } from '../src/paths.mjs'
+import { configFile, jevEnvFile, legacyConfigFile, modLogFile, relayerEnvFile, stateDir } from '../src/paths.mjs'
 import { allowsInlineSwitch } from '../src/switching.mjs'
 import { isDowngrade, sameModel, tierOf } from '../src/tiers.mjs'
 import { isCorrection } from '../src/regret.mjs'
@@ -60,9 +60,16 @@ async function load($: EngineInterface) {
   } catch {
     state.jevEnv = {}
   }
-  const names = [...RELAY_ENV_NAMES, ...providerEnvNames(state.config)]
-  const real = await Promise.all(names.map(async name => [name, await $.env.get(name)] as const))
-  state.env = Object.fromEntries(real.filter(([, value]) => value))
+  const fileEnv = await $.fs.read(relayerEnvFile(home)).then(parseEnv).catch(() => ({}))
+  const real = {
+    JEV_RELAYER: await $.env.get('JEV_RELAYER'),
+    JEV_RELAY: await $.env.get('JEV_RELAY'),
+    ANTHROPIC_CUSTOM_MODEL_OPTION_NAME: await $.env.get('ANTHROPIC_CUSTOM_MODEL_OPTION_NAME'),
+    OPENROUTER_API_KEY: await $.env.get('OPENROUTER_API_KEY'),
+    TYPESAFE_API_KEY: await $.env.get('TYPESAFE_API_KEY'),
+    JEV_API_KEY: await $.env.get('JEV_API_KEY'),
+  }
+  state.env = Object.fromEntries(Object.entries({ ...fileEnv, ...real }).filter(([, value]) => value))
 }
 
 async function remoteOf($: EngineInterface, cwd: string) {

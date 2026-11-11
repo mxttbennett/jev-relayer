@@ -3,11 +3,6 @@ import { classifierPrompt, jevQuestions, parseVerdict, verdictFromJev } from "./
 
 const JEV_KEYS = ["OPENROUTER_API_KEY", "TYPESAFE_API_KEY", "JEV_API_KEY"];
 
-export const providerEnvNames = (config) => [
-  ...JEV_KEYS,
-  ...Object.values(config.providers).map((provider) => provider.apiKeyEnv).filter(Boolean),
-];
-
 async function request(fetchFn, url, { body, headers, timeoutMs }) {
   const res = await fetchFn(url, {
     method: body ? "POST" : "GET",

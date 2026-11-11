@@ -334,8 +334,7 @@ describe('provider settings in the mod', () => {
       providers: { local: { type: 'openai-compat', baseUrl: 'http://pc', model: 'qwen', apiKeyEnv: 'PC_KEY', timeoutMs: 1000 } },
     })
     const { $ } = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku' }, {
-      files: { '/home/t/.config/jev-relayer/config.json': config },
-      vars: { PC_KEY: 'secret' },
+      files: { '/home/t/.config/jev-relayer/config.json': config, '/home/t/.config/jev-relayer/.env': 'PC_KEY=secret\n' },
       http: {
         fetch: async (_url: string, init: any) => {
           headers.push(init.headers)
