@@ -10,8 +10,10 @@ const confidenceText = (confidence) => (confidence == null ? null : confidence.t
 const tokensText = (tokens) => `${Math.round(tokens / 1000)}k`;
 const dotted = (parts) => parts.filter(Boolean).map((part) => ` · ${part}`).join("");
 
-export function buildNotice(verdict) {
-  const detail = dotted([verdict.model, confidenceText(verdict.confidence)]);
+const via = (provider) => provider && `via ${provider}`;
+
+export function buildNotice(verdict, provider) {
+  const detail = dotted([verdict.model, confidenceText(verdict.confidence), via(provider)]);
   if (verdict.placement === "subagent") return `↪ jev-relayer: subagent${detail}`;
   if (verdict.placement === "sibling") return `↪ jev-relayer: sibling session${detail}`;
   return null;
@@ -21,8 +23,8 @@ export const gateSkipNotice = (contextTokens, cache) => `· jev-relayer: skipped
 
 export const cooldownSkipNotice = (since, prompts) => `· jev-relayer: skipped · cooling down (${since}/${prompts})`;
 
-export function appliedNotice({ current, picked, effort, switched, blocked, contextTokens, confidence }) {
-  const tail = dotted([effort, confidenceText(confidence)]);
+export function appliedNotice({ current, picked, effort, switched, blocked, contextTokens, confidence, provider }) {
+  const tail = dotted([effort, confidenceText(confidence), via(provider)]);
   if (switched) return `jev → ${picked}${tail}`;
   const stay = tierOf(current) ?? current;
   if (blocked) return `jev: staying on ${stay} · ${tierOf(picked) ?? picked} skipped, ${tokensText(contextTokens)} context is cached${tail}`;

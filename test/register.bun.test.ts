@@ -95,7 +95,7 @@ describe('inline switching in the mod', () => {
     // Assert
     expect(step.model).toBeUndefined()
     expect(applied(records)).toMatchObject({ switched: false, downgrade: false, downgradeBlocked: true })
-    expect(statuses).toEqual(['jev: staying on opus · haiku skipped, 80k context is cached · low · 0.90'])
+    expect(statuses).toEqual(['jev: staying on opus · haiku skipped, 80k context is cached · low · 0.90 · via jev'])
   })
 
   test('applies a downgrade on a small context and records cache creation tokens', async () => {
@@ -105,7 +105,7 @@ describe('inline switching in the mod', () => {
     // Act
     const step = await typedTurn($, 'rename the variable', 't1')
     // Assert
-    expect(statuses).toEqual(['jev → haiku · low · 0.90'])
+    expect(statuses).toEqual(['jev → haiku · low · 0.90 · via jev'])
     expect(step.model).toBe('haiku')
     expect(applied(records)).toMatchObject({ switched: true, downgrade: true, downgradeBlocked: false, cacheCreationTokens: 40 })
   })

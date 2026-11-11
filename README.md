@@ -23,13 +23,13 @@ Started from [psadventure/jev-model-router](https://github.com/psadventure/jev-m
 Each time jev-relayer acts, it prints one line:
 
 ```
-↪ jev-relayer: subagent · sonnet · 0.90
-↪ jev-relayer: sibling session · sonnet · 0.85
+↪ jev-relayer: subagent · sonnet · 0.90 · via jev
+↪ jev-relayer: sibling session · sonnet · 0.85 · via apple
 ↪ jev-relayer: subagent model → haiku
 ⚠ jev-relayer: no classifier answered, using heuristics
 ```
 
-The last number is the classifier's confidence.
+The number is the classifier's confidence, and `via` names the provider that answered.
 
 ## The three verdicts
 
@@ -279,9 +279,9 @@ The mod applies the pick, so it reports the final verdict. It writes one dim lin
 after the turn's model is settled. The line is not sent to the model:
 
 ```
-jev → haiku · low · 0.90
-jev: staying on opus · haiku skipped, 152k context is cached · low · 0.98
-jev: sonnet · low
+jev → haiku · low · 0.90 · via jev
+jev: staying on opus · haiku skipped, 152k context is cached · low · 0.98 · via apple
+jev: sonnet · low · via jev
 ```
 
 Set `"macNotifications": true` to also get a native macOS notification whenever jev-relayer acts or
