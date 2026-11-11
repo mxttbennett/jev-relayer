@@ -127,9 +127,8 @@ A chain lists providers in order, and the first that answers wins. `chain` sets 
 - A repo that matches no profile, or has no remote, uses `chain` and reports as `default` in stats.
 - `profiles` is empty by default.
 
-Providers: `jev` (OpenRouter or TypeSafe), `ollama`, `openai-compat`, `heuristics`. `ollama` and
-`openai-compat` need a `providers` entry of your own, such as a local model, before a chain can
-name them.
+Providers: `jev` (OpenRouter or TypeSafe), `ollama`, `openai-compat`, `apple`, `heuristics`. `ollama`,
+`openai-compat` and `apple` need a `providers` entry of your own before a chain can name them.
 
 If every classifier fails, the hook says so once per session and falls back to heuristics.
 
@@ -154,6 +153,33 @@ address or a Tailscale IP.
   through to the next provider.
 - A provider that keeps failing is skipped by the circuit breaker, so a powered-off host costs
   one timeout, not one per prompt.
+
+### Use Apple Intelligence
+
+The `apple` provider runs Apple's on-device model through a small Swift helper. It needs macOS 26
+or later with Apple Intelligence turned on.
+
+1. Build the helper:
+
+   ```bash
+   bun run build:apple
+   ```
+
+2. Name it in a chain:
+
+   ```json
+   {
+     "chain": ["apple", "jev", "heuristics"],
+     "providers": { "apple": { "type": "apple", "timeoutMs": 8000 } }
+   }
+   ```
+
+- Guided generation limits each answer to the offered choices, so the reply always parses.
+- The model's context window is about 4k tokens. The provider sends only the last `maxChars`
+  (6000) characters of the excerpt.
+- It counts as local. Prompts never leave the Mac.
+- If Apple Intelligence is off, the helper is missing or the model refuses, the chain moves on.
+- `binary` overrides the helper path.
 
 ### Privacy
 

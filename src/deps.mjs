@@ -1,5 +1,5 @@
 import { closeSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, writeFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { homedir } from "node:os";
 import { dirname } from "node:path";
 import { AGENTS } from "./agents.mjs";
@@ -58,6 +58,13 @@ const fileBreaker = () =>
     },
   });
 
+const runArgv = ([cmd, ...args], { timeoutMs }) =>
+  new Promise((resolve) => {
+    execFile(cmd, args, { encoding: "utf8", timeout: timeoutMs }, (err, stdout) =>
+      resolve({ stdout, exitCode: err ? (typeof err.code === "number" ? err.code : 1) : 0 }),
+    );
+  });
+
 const timedFetch = (url, { timeoutMs, ...init }) => fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
 
 export function defaultDeps(agent, config) {
@@ -73,6 +80,6 @@ export function defaultDeps(agent, config) {
     state: createStateStore(),
     breaker: fileBreaker(),
     readTranscript: (path) => parseTranscript(readTail(path), spec.parseLine),
-    providers: createProviders(config, { env, fetch: timedFetch, readJevEnv: () => readEnvFile(jevEnvFile(home)) }),
+    providers: createProviders(config, { env, fetch: timedFetch, run: runArgv, readJevEnv: () => readEnvFile(jevEnvFile(home)) }),
   };
 }

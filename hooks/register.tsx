@@ -138,6 +138,7 @@ async function decide($: EngineInterface, prompt: string, trigger: string, isFir
   const providers = createProviders(state.config, {
     env: state.env,
     fetch: fetchLike($),
+    run: (argv: string[], { timeoutMs }: { timeoutMs: number }) => $.process.run(argv, { timeoutMs }),
     readJevEnv: () => state.jevEnv,
   })
   const cwd = await $.session.cwd()

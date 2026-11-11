@@ -10,6 +10,7 @@ import { migrateLegacyDirs } from "../src/legacy.mjs";
 import { heuristicVerdict, shouldClassify } from "../src/heuristics.mjs";
 import { parseVerdict } from "../src/prompt.mjs";
 import { createProviders } from "../src/providers.mjs";
+import { defaultDeps } from "../src/deps.mjs";
 import { redact } from "../src/redact.mjs";
 import { claudeLine, codexLine, parseTranscript } from "../src/transcripts.mjs";
 import { runCli } from "../src/cli.mjs";
@@ -141,6 +142,39 @@ test("ollama provider sends think:true and reads message.content", async () => {
   assert.equal(body.think, true);
   assert.equal(body.model, "bonsai-2:27b");
   assert.equal(verdict.model, "sonnet");
+});
+
+test("apple provider sends the tail of the excerpt with every choice list and parses the helper's JSON", async () => {
+  let argv;
+  const run = async (args) => {
+    argv = args;
+    return { exitCode: 0, stdout: '{"placement":"subagent","agent":"Explore","model":"haiku","title":"Find exports","confidence":0.7}' };
+  };
+  const config = merge(DEFAULTS, { providers: { apple: { type: "apple", binary: "/bin/helper", maxChars: 10, timeoutMs: 8000 } } });
+  const { apple } = createProviders(config, { env: {}, run });
+  const verdict = await apple.run({ text: "x".repeat(50) + "user: tail", offered: { model: { haiku: "d" } } });
+  const request = JSON.parse(argv[1]);
+  assert.equal(argv[0], "/bin/helper");
+  assert.ok(request.prompt.endsWith("user: tail") && !request.prompt.includes("xx"));
+  assert.deepEqual(request.choices.model, ["haiku"]);
+  assert.deepEqual(request.choices.placement, ["inline", "subagent", "sibling"]);
+  assert.equal(apple.remote, false);
+  assert.deepEqual(verdict, { placement: "subagent", agent: "Explore", model: "haiku", effort: null, toolset: null, title: "Find exports", confidence: 0.7 });
+});
+
+test("apple provider throws when the helper fails so the chain moves on", async () => {
+  const config = merge(DEFAULTS, { providers: { apple: { type: "apple" } } });
+  const { apple } = createProviders(config, { env: {}, run: async () => ({ exitCode: 69, stdout: "" }) });
+  await assert.rejects(apple.run({ text: "user: hi", offered: {} }), /exited 69/);
+});
+
+test("apple provider runs the helper as a real process through the default deps", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "jev-apple-"));
+  const ok = join(dir, "ok");
+  writeFileSync(ok, `#!/bin/sh\necho '{"placement":"inline","agent":"Plan","title":"t","confidence":0.5}'\n`, { mode: 0o755 });
+  const providersFor = (binary) => defaultDeps("claude", merge(DEFAULTS, { providers: { apple: { type: "apple", binary, timeoutMs: 5000 } } })).providers;
+  assert.equal((await providersFor(ok).apple.run({ text: "user: hi", offered: {} })).placement, "inline");
+  await assert.rejects(providersFor("/usr/bin/false").apple.run({ text: "user: hi", offered: {} }), /exited 1/);
 });
 
 const jsonl = (rows) => rows.map((r) => JSON.stringify(r)).join("\n");
