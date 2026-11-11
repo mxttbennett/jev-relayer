@@ -150,12 +150,12 @@ test("apple provider sends the tail of the excerpt with every choice list and pa
     argv = args;
     return { exitCode: 0, stdout: '{"placement":"subagent","agent":"Explore","model":"haiku","title":"Find exports","confidence":0.7}' };
   };
-  const config = merge(DEFAULTS, { providers: { apple: { type: "apple", binary: "/bin/helper", maxChars: 10, timeoutMs: 8000 } } });
+  const config = merge(DEFAULTS, { providers: { apple: { type: "apple", binary: "/bin/helper", timeoutMs: 8000 } } });
   const { apple } = createProviders(config, { env: {}, run });
-  const verdict = await apple.run({ text: "x".repeat(50) + "user: tail", offered: { model: { haiku: "d" } } });
+  const verdict = await apple.run({ text: "user: tail", offered: { model: { haiku: "d" } } });
   const request = JSON.parse(argv[1]);
   assert.equal(argv[0], "/bin/helper");
-  assert.ok(request.prompt.endsWith("user: tail") && !request.prompt.includes("xx"));
+  assert.ok(request.prompt.includes("user: tail"));
   assert.deepEqual(request.choices.model, ["haiku"]);
   assert.deepEqual(request.choices.placement, ["inline", "subagent", "sibling"]);
   assert.equal(apple.remote, false);

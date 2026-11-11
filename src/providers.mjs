@@ -60,8 +60,7 @@ const FACTORIES = {
   },
 
   apple: (cfg, ctx) => async (input) => {
-    const excerpt = input.text.slice(-(cfg.maxChars ?? 6000));
-    const request = { prompt: classifierPrompt(excerpt, input.offered), choices: choiceLists(input.offered) };
+    const request = { prompt: classifierPrompt(input.text, input.offered), choices: choiceLists(input.offered) };
     const { stdout, exitCode } = await ctx.run([cfg.binary ?? APPLE_BINARY, JSON.stringify(request)], {
       timeoutMs: cfg.timeoutMs,
     });
