@@ -309,10 +309,7 @@ The classifier reads each `description` and picks one. For a Claude sibling, jev
 ### Band and verdict line
 
 The band above the prompt shows the latest verdict, for example `jev: inline · haiku · 0.83`, with a
-Switch button when the pick differs from the session model. While a subagent's transcript is in view,
-the band names that subagent's model instead, for example `jev: subagent · claude-haiku-5-5`. The
-status line can't do this, because Claude Code doesn't tell it which agent is in view. It is off by
-default:
+Switch button when the pick differs from the session model. It is off by default:
 
 ```bash
 jev-relayer band on

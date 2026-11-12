@@ -119,7 +119,7 @@ describe('delegation in the mod', () => {
     // Act
     await typedTurn($, 'find every caller of parse', 't1', seen)
     // Assert
-    expect(spawns).toEqual([{ prompt: 'find every caller of parse', model: 'haiku', subagentType: 'Explore', description: 'find every caller of parse' }])
+    expect(spawns).toEqual([{ prompt: 'find every caller of parse', model: 'haiku', subagentType: 'Explore', description: '[haiku] find every caller of parse' }])
     expect(seen.submitted.context).toEqual(['jev-relayer: reply with exactly "jev-relayer: started a subagent (claude-haiku) for this request." and stop; its result arrives when it finishes.'])
     expect(actions(records)).toEqual(['spawned'])
   })
@@ -270,7 +270,7 @@ describe('delegation in the mod', () => {
     // Act
     await typedTurn($, 'clean up the old branches', 't2')
     // Assert
-    expect(spawns).toEqual([{ prompt: 'clean up the old branches', model: 'sonnet', subagentType: 'general-purpose', name: 'jev-sibling', description: 'clean up the old branches', cwd: '/repo' }])
+    expect(spawns).toEqual([{ prompt: 'clean up the old branches', model: 'sonnet', subagentType: 'general-purpose', name: 'jev-sibling', description: '[sonnet] clean up the old branches', cwd: '/repo' }])
     expect(actions(records)).toEqual(['accepted'])
   })
 
