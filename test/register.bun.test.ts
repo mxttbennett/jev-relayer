@@ -234,7 +234,7 @@ describe('delegation in the mod', () => {
     expect(actions(records)).toEqual(['delegated-to-model'])
   })
 
-  test('a spawned subagent's result comes back as a prompt', async () => {
+  test('the result of a spawned subagent comes back as a prompt', async () => {
     // Arrange
     const submitted: string[] = []
     const { $ } = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku', placement: 'subagent' }, {
