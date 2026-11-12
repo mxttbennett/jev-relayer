@@ -38,6 +38,17 @@ describe('model label on spawned subagents', () => {
     expect(forwarded).toMatchObject({ model: 'haiku', description: '[haiku] Find callers' })
   })
 
+  test('does not label a description twice', async () => {
+    // Arrange
+    const { $ } = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku' })
+    await startSession($)
+    let forwarded: any
+    // Act
+    await handlers.get('agent.spawn')!($, { prompt: 'p', model: 'haiku', description: '[haiku] Find callers' }, async (e: unknown) => ((forwarded = e), { agentId: 'a5', model: 'claude-haiku-5-5' }))
+    // Assert
+    expect(forwarded.description).toBe('[haiku] Find callers')
+  })
+
   test('leaves the description alone when no model is known', async () => {
     // Arrange
     const { $ } = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku' })

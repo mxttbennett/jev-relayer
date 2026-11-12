@@ -176,7 +176,8 @@ async function decide($: EngineInterface, prompt: string, trigger: string, isFir
   return { ...verdict, provider: fields.provider, context: signals.text }
 }
 
-const modelLabel = (model: string, description = '') => `[${model}] ${description}`.trimEnd()
+const modelLabel = (model: string, description = '') =>
+  description.startsWith(`[${model}] `) ? description : `[${model}] ${description}`.trimEnd()
 
 async function spawnSibling($: EngineInterface, prompt: string, model: string, toolset: string | null, title?: string) {
   const cwd = await $.session.cwd()
