@@ -232,6 +232,48 @@ describe('delegation in the mod', () => {
     expect(submitted).toEqual(['jev-relayer: the subagent finished. Its result:\n\nthree callers\n\nTell the user what it found.'])
   })
 
+  describe('after the relay spawned a subagent', () => {
+    const relayed = async () => {
+      const env = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku', placement: 'subagent' }, {
+        agent: { spawn: async () => ({ agentId: 'a1', model: 'claude-haiku' }) },
+      })
+      await startSession(env.$)
+      await handlers.get('prompt.submit')!(env.$, { text: 'find every caller of parse', origin: { kind: 'composer' } }, async (e: unknown) => e)
+      return env
+    }
+    const spawn = ($: any, e: any) => handlers.get('agent.spawn')!($, e, async (x: unknown) => x)
+
+    test('denies the main loop its own Agent call in the same turn', async () => {
+      // Arrange
+      const { $, records } = await relayed()
+      // Act
+      const out = await spawn($, { prompt: 'search for callers', subagentType: 'Explore', fork: false })
+      // Assert
+      expect(out.deny).toContain('jev-relayer already started a subagent')
+      await Bun.sleep(0)
+      expect(actions(records)).toEqual(['spawned', 'duplicate-denied'])
+    })
+
+    test('lets a subagent spawn its own agents', async () => {
+      // Arrange
+      const { $ } = await relayed()
+      // Act
+      const out = await spawn($, { prompt: 'search for callers', parentAgentId: 'a1', model: 'haiku', fork: false })
+      // Assert
+      expect(out.deny).toBeUndefined()
+    })
+
+    test('allows Agent calls again once the main turn completes', async () => {
+      // Arrange
+      const { $ } = await relayed()
+      await handlers.get('turn.complete')!($, { turnId: 't1' }, async (e: unknown) => e)
+      // Act
+      const out = await spawn($, { prompt: 'search for callers', model: 'haiku', fork: false })
+      // Assert
+      expect(out.deny).toBeUndefined()
+    })
+  })
+
   test('an approved sibling runs claude --bg with the toolset flags', async () => {
     // Arrange
     const runs: string[][] = []

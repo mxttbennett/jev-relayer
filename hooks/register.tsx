@@ -33,6 +33,7 @@ const state = {
   pending: new Map<string, Promise<Decision | null>>(),
   byText: new Map<string, Promise<Decision | null>>(),
   spawned: new Set<string>(),
+  handedOff: false,
   typedPrompts: 0,
   lastStopAt: 0,
   lastWasDowngrade: false,
@@ -191,6 +192,7 @@ async function act($: EngineInterface, prompt: string, decision: Decision): Prom
     const started = await $.agent.spawn({ prompt, model, subagentType: decision.agent ?? 'general-purpose', description: decision.title ?? taskLabel(prompt) }).catch(() => null)
     if (started && 'agentId' in started && started.agentId) {
       state.spawned.add(started.agentId)
+      state.handedOff = true
       void record($, { event: 'action', placement: 'subagent', outcome: 'spawned', model })
       return `jev-relayer: reply with exactly "jev-relayer: started a subagent (${started.model}) for this request." and stop; its result arrives when it finishes.`
     }
@@ -212,6 +214,7 @@ async function act($: EngineInterface, prompt: string, decision: Decision): Prom
     void record($, { event: 'action', placement: 'sibling', outcome: 'spawn-failed', model })
     return null
   }
+  state.handedOff = true
   void record($, { event: 'action', placement: 'sibling', outcome: 'accepted', model })
   return `jev-relayer: the user's request was handed to a background session (${model}). Reply with one short sentence saying so and stop; do not do the work here.`
 }
@@ -247,6 +250,7 @@ export const register: Register = on => {
   on('prompt.submit', async ($, e, next) => {
     if (!TYPED_ORIGINS.includes(e.origin.kind) || e.command || state.isManual || !isOn() || e.text.trim() === '' || e.text.includes(RESULT_PREFIX)) return next(e)
 
+    state.handedOff = false
     const isFirstPrompt = state.typedPrompts++ === 0
     if (state.lastWasDowngrade && isCorrection(e.text)) void record($, { event: 'regret' })
     state.lastWasDowngrade = false
@@ -327,6 +331,7 @@ export const register: Register = on => {
 
   on('turn.complete', async ($, e, next) => {
     state.pending.delete(e.turnId)
+    if (!e.agentId) state.handedOff = false
     if (e.agentId && state.spawned.delete(e.agentId) && e.answer) {
       void $.prompt.submit({ text: `${RESULT_PREFIX} Its result:\n\n${e.answer}\n\nTell the user what it found.` })
     }
@@ -334,6 +339,10 @@ export const register: Register = on => {
   })
 
   on('agent.spawn', async ($, e, next) => {
+    if (state.handedOff && !e.parentAgentId) {
+      void record($, { event: 'action', placement: 'subagent', outcome: 'duplicate-denied', subagentType: e.subagentType ?? null })
+      return { deny: 'jev-relayer already started a subagent for this request; reply in one line and stop. Its result arrives when it finishes.' }
+    }
     if (e.fork || e.model || !isOn() || isSelfRouted(state.env)) return next(e)
     const raced = await withinDeadline($, decide($, e.prompt, 'spawn').catch(logFailure($, 'spawn')))
     const decision = raced === MISSED ? null : raced
