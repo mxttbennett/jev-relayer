@@ -234,7 +234,7 @@ describe('delegation in the mod', () => {
     expect(actions(records)).toEqual(['delegated-to-model'])
   })
 
-  test('the result of a spawned subagent comes back as a prompt', async () => {
+  test('a spawned subagent's result comes back as a prompt', async () => {
     // Arrange
     const submitted: string[] = []
     const { $ } = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku', placement: 'subagent' }, {
@@ -247,6 +247,31 @@ describe('delegation in the mod', () => {
     await handlers.get('turn.complete')!($, { turnId: 'x', agentId: 'a1', answer: 'three callers' }, async (e: unknown) => e)
     // Assert
     expect(submitted).toEqual(['jev-relayer: the subagent finished. Its result:\n\nthree callers\n\nTell the user what it found.'])
+  })
+
+  describe('a spawned subagent result', () => {
+    const finish = async (answer: string) => {
+      const submitted: string[] = []
+      const { $, records } = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku', placement: 'subagent' }, {
+        agent: { spawn: async () => ({ agentId: 'a1', model: 'claude-haiku' }) },
+        prompt: { submit: async ({ text }: any) => void submitted.push(text) },
+      })
+      await startSession($)
+      await typedTurn($, 'find every caller of parse', 't1')
+      await handlers.get('turn.complete')!($, { turnId: 't2', agentId: 'a1', answer }, async (e: unknown) => e)
+      return { submitted, records }
+    }
+
+    test('is skipped when it reports missing context', async () => {
+      const { submitted, records } = await finish("I can't tell from here, I lack the earlier conversation.")
+      expect(submitted).toEqual([])
+      expect(actions(records)).toEqual(['spawned', 'result-skipped'])
+    })
+
+    test('is kept when a long answer mentions context', async () => {
+      const { submitted } = await finish(`no missing context. ${'x'.repeat(600)}`)
+      expect(submitted).toHaveLength(1)
+    })
   })
 
   describe('after the relay spawned a subagent', () => {

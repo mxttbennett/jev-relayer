@@ -90,6 +90,8 @@ const RESULT_PREFIX = 'jev-relayer: the subagent finished.'
 const ENGINE_EFFORTS = ['low', 'medium', 'high', 'xhigh'] as const
 type EngineEffort = (typeof ENGINE_EFFORTS)[number]
 const isEngineEffort = (effort: string | null | undefined): effort is EngineEffort => ENGINE_EFFORTS.some(known => known === effort)
+const MISSING_CONTEXT = /\b(lack|lacking|missing|without|(?:do not|don't|doesn't|does not|cannot|can't) (?:have|see|tell))\b[^.\n]{0,40}\b(context|conversation|earlier turns|previous turns)\b/i
+const MISSING_CONTEXT_MAX_CHARS = 600
 const MISSED = Symbol('missed')
 
 const withinDeadline = <T,>($: EngineInterface, pending: Promise<T> | undefined) =>
@@ -340,6 +342,10 @@ export const register: Register = on => {
     state.pending.delete(e.turnId)
     if (!e.agentId) state.handedOff = false
     if (e.agentId && state.spawned.delete(e.agentId) && e.answer) {
+      if (e.answer.length <= MISSING_CONTEXT_MAX_CHARS && MISSING_CONTEXT.test(e.answer)) {
+        void record($, { event: 'action', placement: 'subagent', outcome: 'result-skipped' })
+        return next(e)
+      }
       void $.prompt.submit({ text: `${RESULT_PREFIX} Its result:\n\n${e.answer}\n\nTell the user what it found.` })
     }
     return next(e)
