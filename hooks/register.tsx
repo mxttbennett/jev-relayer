@@ -1,4 +1,4 @@
-import type { EngineInterface, Register } from 'claude-code'
+import type { AgentSpawnResult, EngineInterface, Register } from 'claude-code'
 
 import { AGENTS, siblingFlags } from '../src/agents.mjs'
 import { gitOriginArgv, isEnabled, isSelfRouted, resolveConfig } from '../src/defaults.mjs'
@@ -34,6 +34,7 @@ const state = {
   pending: new Map<string, Promise<Decision | null>>(),
   byText: new Map<string, Promise<Decision | null>>(),
   spawned: new Set<string>(),
+  agentModels: new Map<string, string>(),
   handedOff: false,
   typedPrompts: 0,
   lastStopAt: 0,
@@ -187,7 +188,10 @@ async function spawnSibling($: EngineInterface, prompt: string, model: string, t
   }
   try {
     const started = await $.agent.spawn({ prompt, model, subagentType: 'general-purpose', name: 'jev-sibling', description: title ?? taskLabel(prompt), cwd })
-    if ('agentId' in started && started.agentId) state.spawned.add(started.agentId)
+    if ('agentId' in started && started.agentId) {
+      state.spawned.add(started.agentId)
+      state.agentModels.set(started.agentId, started.model)
+    }
     return 'agentId' in started
   } catch {
     return false
@@ -201,6 +205,7 @@ async function act($: EngineInterface, prompt: string, decision: Decision): Prom
     const started = await $.agent.spawn({ prompt: brief, model, subagentType: decision.agent ?? 'general-purpose', description: decision.title ?? taskLabel(prompt) }).catch(() => null)
     if (started && 'agentId' in started && started.agentId) {
       state.spawned.add(started.agentId)
+      state.agentModels.set(started.agentId, started.model)
       state.handedOff = true
       void record($, { event: 'action', placement: 'subagent', outcome: 'spawned', model })
       return `jev-relayer: reply with exactly "jev-relayer: started a subagent (${started.model}) for this request." and stop; its result arrives when it finishes.`
@@ -236,6 +241,7 @@ export const register: Register = on => {
     state.lastStopAt = 0
     state.lastWasDowngrade = false
     state.siblingQuietUntil = 0
+    state.agentModels.clear()
     state.baseline = await $.session.model()
     return next(e)
   })
@@ -356,17 +362,30 @@ export const register: Register = on => {
       void record($, { event: 'action', placement: 'subagent', outcome: 'duplicate-denied', subagentType: e.subagentType ?? null })
       return { deny: 'jev-relayer already started a subagent for this request; reply in one line and stop. Its result arrives when it finishes.' }
     }
-    if (e.fork || e.model || !isOn() || isSelfRouted(state.env)) return next(e)
+    const remember = async (started: Promise<AgentSpawnResult>) => {
+      const result = await started
+      if ('agentId' in result && result.agentId) state.agentModels.set(result.agentId, result.model)
+      return result
+    }
+    if (e.fork || e.model || !isOn() || isSelfRouted(state.env)) return remember(next(e))
     const raced = await withinDeadline($, decide($, e.prompt, 'spawn').catch(logFailure($, 'spawn')))
     const decision = raced === MISSED ? null : raced
     if (raced === MISSED) void record($, { event: 'deadline-miss', where: 'spawn', deadlineMs: DEADLINE_MS })
     void record($, { event: 'spawn-model', picked: decision?.model ?? null })
-    return next(decision?.model ? { ...e, model: decision.model } : e)
+    return remember(next(decision?.model ? { ...e, model: decision.model } : e))
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (!state.config.band.enabled) return next(e)
+    const viewed = e.props.view.agentId
+    if (viewed) {
+      const model = state.agentModels.get(viewed)
+      if (!model) return next(e)
+      const { Text } = $.ui.resolve(e)
+      return <Text dimColor>{bandLabel({ placement: 'subagent', model, confidence: null })} </Text>
+    }
     const verdict = state.latest
-    if (!state.config.band.enabled || !verdict) return next(e)
+    if (!verdict) return next(e)
 
     const { Box, Button, Text } = $.ui.resolve(e)
     const target = verdict.model
