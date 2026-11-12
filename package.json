@@ -9,7 +9,7 @@
   "scripts": {
     "build:apple": "mkdir -p apple/.build && swiftc -O apple/classify.swift -o apple/.build/jev-apple-classify",
     "test": "node --test test/*.test.mjs",
-    "test:mod": "bun test test/register.bun.test.ts",
+    "test:mod": "bun test test/*.bun.test.ts",
     "typecheck": "npx -y -p typescript@5.6.3 tsc -p ."
   }
 }

@@ -176,6 +176,9 @@ async function decide($: EngineInterface, prompt: string, trigger: string, isFir
   return { ...verdict, provider: fields.provider, context: signals.text }
 }
 
+const modelLabel = (model: string, description = '') =>
+  description.startsWith(`[${model}] `) ? description : `[${model}] ${description}`.trimEnd()
+
 async function spawnSibling($: EngineInterface, prompt: string, model: string, toolset: string | null, title?: string) {
   const cwd = await $.session.cwd()
   const flags = siblingFlags('claude', toolset, state.config, state.home)
@@ -186,7 +189,7 @@ async function spawnSibling($: EngineInterface, prompt: string, model: string, t
     if (!isUnavailable(err)) return false
   }
   try {
-    const started = await $.agent.spawn({ prompt, model, subagentType: 'general-purpose', name: 'jev-sibling', description: title ?? taskLabel(prompt), cwd })
+    const started = await $.agent.spawn({ prompt, model, subagentType: 'general-purpose', name: 'jev-sibling', description: modelLabel(model, title ?? taskLabel(prompt)), cwd })
     if ('agentId' in started && started.agentId) state.spawned.add(started.agentId)
     return 'agentId' in started
   } catch {
@@ -198,7 +201,7 @@ async function act($: EngineInterface, prompt: string, decision: Decision): Prom
   const model = decision.model ?? 'sonnet'
   if (decision.placement === 'subagent') {
     const brief = decision.context && decision.context !== `user: ${prompt}` ? `${decision.context}\n\nYou are a subagent. Answer the last user message above, using the earlier turns as context.` : prompt
-    const started = await $.agent.spawn({ prompt: brief, model, subagentType: decision.agent ?? 'general-purpose', description: decision.title ?? taskLabel(prompt) }).catch(() => null)
+    const started = await $.agent.spawn({ prompt: brief, model, subagentType: decision.agent ?? 'general-purpose', description: modelLabel(model, decision.title ?? taskLabel(prompt)) }).catch(() => null)
     if (started && 'agentId' in started && started.agentId) {
       state.spawned.add(started.agentId)
       state.handedOff = true
@@ -356,12 +359,14 @@ export const register: Register = on => {
       void record($, { event: 'action', placement: 'subagent', outcome: 'duplicate-denied', subagentType: e.subagentType ?? null })
       return { deny: 'jev-relayer already started a subagent for this request; reply in one line and stop. Its result arrives when it finishes.' }
     }
-    if (e.fork || e.model || !isOn() || isSelfRouted(state.env)) return next(e)
+    const labeled = (spawn: typeof e, model?: string | null) => (model ? { ...spawn, description: modelLabel(model, spawn.description) } : spawn)
+    if (e.fork || e.model || !isOn() || isSelfRouted(state.env)) return next(labeled(e, e.model))
     const raced = await withinDeadline($, decide($, e.prompt, 'spawn').catch(logFailure($, 'spawn')))
     const decision = raced === MISSED ? null : raced
     if (raced === MISSED) void record($, { event: 'deadline-miss', where: 'spawn', deadlineMs: DEADLINE_MS })
     void record($, { event: 'spawn-model', picked: decision?.model ?? null })
-    return next(decision?.model ? { ...e, model: decision.model } : e)
+    const picked = decision?.model ? { ...e, model: decision.model } : e
+    return next(labeled(picked, picked.model))
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
