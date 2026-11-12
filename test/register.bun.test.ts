@@ -203,6 +203,23 @@ describe('delegation in the mod', () => {
     expect(actions(records)).toEqual(['spawned'])
   })
 
+  test('a subagent gets the earlier turns of the conversation', async () => {
+    // Arrange
+    const spawns: any[] = []
+    const line = (type: string, text: string) => JSON.stringify({ type, message: { content: text } })
+    const transcript = [line('user', 'why is parse slow'), line('assistant', 'it re-reads the file')].join('\n')
+    const { $ } = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku', placement: 'subagent', agent: 'Explore' }, {
+      agent: { spawn: async (input: any) => (spawns.push(input), { agentId: 'a1', model: 'claude-haiku' }) },
+      files: { '/home/t/.claude/projects/-repo/s-transcript.jsonl': transcript },
+    })
+    $.session.id = async () => 's-transcript'
+    await startSession($)
+    // Act
+    await typedTurn($, 'did that create one more subagent', 't1')
+    // Assert
+    expect(spawns[0].prompt).toBe('user: why is parse slow\n\nassistant: it re-reads the file\n\nuser: did that create one more subagent\n\nYou are a subagent. Answer the last user message above, using the earlier turns as context.')
+  })
+
   test('a failed subagent spawn asks the model to delegate instead', async () => {
     // Arrange
     const { $, records } = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku', placement: 'subagent' }, {

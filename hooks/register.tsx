@@ -6,6 +6,7 @@ import { parseEnv } from '../src/envfile.mjs'
 import { createProviders } from '../src/providers.mjs'
 import { isChange, sendNotification, transcriptPath } from '../src/notify.mjs'
 import { classify, excerptOf } from '../src/classify.mjs'
+import { claudeLine, parseTranscript } from '../src/transcripts.mjs'
 import { appliedNotice, bandLabel, decisionLabel } from '../src/nudge.mjs'
 import { configFile, jevEnvFile, legacyConfigFile, modLogFile, relayerEnvFile, stateDir } from '../src/paths.mjs'
 import { allowsInlineSwitch } from '../src/switching.mjs'
@@ -15,7 +16,7 @@ import { taskLabel } from '../src/task-label.mjs'
 import { memoryBreaker } from '../src/breaker.mjs'
 import { createBufferedLog } from '../src/buffered-log.mjs'
 
-type Decision = { placement: string; model: string | null; effort: string | null; toolset: string | null; agent?: string; title?: string; confidence: number | null; provider?: string }
+type Decision = { placement: string; model: string | null; effort: string | null; toolset: string | null; agent?: string; title?: string; confidence: number | null; provider?: string; context?: string }
 type Vars = Record<string, string | undefined>
 
 const DEADLINE_MS = 4000
@@ -125,9 +126,13 @@ async function record($: EngineInterface, entry: Record<string, unknown>) {
   }
 }
 
-async function notify($: EngineInterface, message: string) {
+async function transcriptFile($: EngineInterface) {
   const configDir = (await $.env.get('CLAUDE_CONFIG_DIR')) || `${state.home}/.claude`
-  const path = transcriptPath({ configDir, cwd: await $.session.cwd(), id: await $.session.id() })
+  return transcriptPath({ configDir, cwd: await $.session.cwd(), id: await $.session.id() })
+}
+
+async function notify($: EngineInterface, message: string) {
+  const path = await transcriptFile($)
   await sendNotification({
     message,
     readTranscript: () => $.fs.read(path),
@@ -144,8 +149,9 @@ async function decide($: EngineInterface, prompt: string, trigger: string, isFir
   })
   const cwd = await $.session.cwd()
   const remote = await remoteOf($, cwd)
+  const transcript = await $.fs.read(await transcriptFile($)).catch(() => '')
   const signals = {
-    text: excerptOf([], prompt),
+    text: excerptOf(parseTranscript(String(transcript), claudeLine).turns, prompt, state.config.excerptTurns),
     prompt,
     agent: 'claude',
     contextTokens: (await $.session.usage()).context.tokens ?? 0,
@@ -165,7 +171,7 @@ async function decide($: EngineInterface, prompt: string, trigger: string, isFir
   const changed = isChange(state.latest, verdict)
   state.latest = verdict
   if (state.config.macNotifications && changed) void notify($, decisionLabel(verdict))
-  return { ...verdict, provider: fields.provider }
+  return { ...verdict, provider: fields.provider, context: signals.text }
 }
 
 async function spawnSibling($: EngineInterface, prompt: string, model: string, toolset: string | null, title?: string) {
@@ -189,7 +195,8 @@ async function spawnSibling($: EngineInterface, prompt: string, model: string, t
 async function act($: EngineInterface, prompt: string, decision: Decision): Promise<string | null> {
   const model = decision.model ?? 'sonnet'
   if (decision.placement === 'subagent') {
-    const started = await $.agent.spawn({ prompt, model, subagentType: decision.agent ?? 'general-purpose', description: decision.title ?? taskLabel(prompt) }).catch(() => null)
+    const brief = decision.context && decision.context !== `user: ${prompt}` ? `${decision.context}\n\nYou are a subagent. Answer the last user message above, using the earlier turns as context.` : prompt
+    const started = await $.agent.spawn({ prompt: brief, model, subagentType: decision.agent ?? 'general-purpose', description: decision.title ?? taskLabel(prompt) }).catch(() => null)
     if (started && 'agentId' in started && started.agentId) {
       state.spawned.add(started.agentId)
       state.handedOff = true
