@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { DEFAULTS } from "../src/defaults.mjs";
 import { runChain } from "../src/chain.mjs";
-import { handlePrompt, pickSubagentModel } from "../src/relay.mjs";
+import { handlePrompt, pickSubagent } from "../src/relay.mjs";
 import { formatSummary, percentile, readEvents, runStats, summarize } from "../src/stats.mjs";
 import { createBufferedLog } from "../src/buffered-log.mjs";
 
@@ -66,7 +66,7 @@ test("gate and cooldown skips are logged with their reason", async () => {
 
 test("subagent model picks log where the model came from", async () => {
   const { deps, logs } = setup({ jev: answer({ placement: "inline", model: "opus" }), heuristics });
-  const call = (tool_input) => pickSubagentModel({ input: { session_id: "n", cwd: "/x", tool_input }, agent: "claude", config: DEFAULTS, deps });
+  const call = (tool_input) => pickSubagent({ input: { session_id: "n", cwd: "/x", tool_input }, agent: "claude", config: DEFAULTS, deps });
   await call({ prompt: "p", model: "haiku" });
   await call({ prompt: "p" });
   assert.deepEqual(logs.map((e) => e.source), ["explicit", "classifier"]);
