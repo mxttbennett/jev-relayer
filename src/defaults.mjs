@@ -86,6 +86,11 @@ const OFF_SWITCHES = ["JEV_RELAYER", "JEV_RELAY"];
 const MODEL_OPTION_NAME = "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME";
 export const isSelfRouted = (env) => env[MODEL_OPTION_NAME] === "Jev Router";
 
+export function isModLoaded(env, home, root) {
+  const norm = (dir) => dir.replace(/^~(?=\/|$)/, home).replace(/\/+$/, "");
+  return (env.CLAUDE_CODE_PLUGIN_DIRS ?? "").split(":").filter(Boolean).some((dir) => norm(dir) === norm(root));
+}
+
 export function isEnabled(config, agent, env = {}) {
   if (OFF_SWITCHES.some((name) => env[name] === "off")) return false;
   return config.agents[agent]?.enabled !== false;

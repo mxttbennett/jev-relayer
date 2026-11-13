@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DEFAULTS, merge } from "../src/defaults.mjs";
+import { DEFAULTS, isModLoaded, merge } from "../src/defaults.mjs";
 import { createProviders } from "../src/providers.mjs";
-import { handlePrompt as run, pickSubagentModel } from "../src/relay.mjs";
+import { REPO_ROOT, handlePrompt as run, pickSubagentModel } from "../src/relay.mjs";
 
 const handlePrompt = async (args) => (await run(args))?.context ?? null;
 
@@ -246,4 +246,28 @@ test("a low-confidence log entry keeps a redacted, truncated prompt, and a confi
   const high = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku", confidence: 0.9 }, true), heuristics } });
   await run({ input, agent: "claude", config: high.config, deps: high.deps });
   assert.equal("prompt" in high.logs[0], false);
+});
+
+test("isModLoaded matches the repo in CLAUDE_CODE_PLUGIN_DIRS", () => {
+  const home = "/Users/me";
+  const root = "/Users/me/repos/jev-relayer/";
+  const loaded = (dirs) => isModLoaded({ CLAUDE_CODE_PLUGIN_DIRS: dirs }, home, root);
+  assert.equal(loaded("~/repos/jev-relayer"), true);
+  assert.equal(loaded("/other:/Users/me/repos/jev-relayer/"), true);
+  assert.equal(loaded("/other:~/repos/jev-relayer-routing"), false);
+  assert.equal(loaded(""), false);
+  assert.equal(isModLoaded({}, home, root), false);
+});
+
+test("the claude shell hook stands down when the mod is loaded", async () => {
+  const { deps, config, logs } = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku", confidence: 0.9 }, true), heuristics } });
+  deps.env = { CLAUDE_CODE_PLUGIN_DIRS: `/other:${REPO_ROOT}` };
+  assert.equal(await handlePrompt({ input, agent: "claude", config, deps }), null);
+  assert.deepEqual(logs.map((e) => e.reason), ["mod"]);
+});
+
+test("codex still classifies when the claude mod is loaded", async () => {
+  const { deps, config } = setup({ providers: { jev: answer({ placement: "subagent", model: "gpt-6-luna", confidence: 0.9 }, true), heuristics } });
+  deps.env = { CLAUDE_CODE_PLUGIN_DIRS: REPO_ROOT };
+  assert.notEqual(await handlePrompt({ input, agent: "codex", config, deps }), null);
 });
