@@ -1,6 +1,7 @@
+import { fileURLToPath } from "node:url";
 import { AGENTS, siblingFlags } from "./agents.mjs";
 import { classify, excerptOf } from "./classify.mjs";
-import { isEnabled, isSelfRouted } from "./defaults.mjs";
+import { isEnabled, isModLoaded, isSelfRouted } from "./defaults.mjs";
 import { cacheExpired, shouldClassify } from "./heuristics.mjs";
 import {
   DEGRADED_BADGE,
@@ -21,8 +22,14 @@ function coolingDown(nudge, contextTokens, cooldown) {
   );
 }
 
+export const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
+
 export async function handlePrompt({ input, agent, config, deps }) {
   if (!isEnabled(config, agent, deps.env)) return null;
+  if (agent === "claude" && isModLoaded(deps.env, deps.env.HOME ?? "", REPO_ROOT)) {
+    deps.state.log({ event: "skip", reason: "mod", agent, session: input.session_id });
+    return null;
+  }
   const snapshot = deps.readTranscript(input.transcript_path);
   const contextTokens = snapshot.contextTokens;
   const idleMs = snapshot.lastAt ? deps.now() - snapshot.lastAt : 0;
