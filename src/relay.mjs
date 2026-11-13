@@ -98,7 +98,7 @@ export async function handlePrompt({ input, agent, config, deps }) {
   return null;
 }
 
-export async function pickSubagentModel({ input, agent, config, deps }) {
+export async function pickSubagent({ input, agent, config, deps }) {
   if (!isEnabled(config, agent, deps.env) || !AGENTS[agent].subagentModel) return null;
   if (isSelfRouted(deps.env)) return null;
   const tool = input.tool_input ?? {};
@@ -111,7 +111,7 @@ export async function pickSubagentModel({ input, agent, config, deps }) {
   const state = deps.state.load(input.session_id);
   if (state.model && deps.now() - state.model.at < MODEL_TTL_MS) {
     deps.state.log({ ...base, source: "cached", model: state.model.value });
-    return state.model.value;
+    return { model: state.model.value, effort: null };
   }
 
   const { verdict, heuristic, fields } = await classify(
@@ -120,5 +120,7 @@ export async function pickSubagentModel({ input, agent, config, deps }) {
     deps,
   );
   deps.state.log({ ...base, source: "classifier", model: verdict.model, ...fields });
-  return heuristic ? null : verdict.model;
+  if (heuristic) return null;
+  const effort = tool.effort === undefined ? verdict.effort ?? null : null;
+  return verdict.model || effort ? { model: verdict.model ?? null, effort } : null;
 }

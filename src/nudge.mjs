@@ -31,7 +31,7 @@ export function appliedNotice({ current, picked, effort, switched, blocked, cont
   return `jev: ${stay}${tail}`;
 }
 
-export const modelNotice = (model) => `↪ jev-relayer: subagent model → ${model}`;
+export const modelNotice = ({ model, effort }) => `↪ jev-relayer: subagent → ${[model, effort].filter(Boolean).join(" · ")}`;
 
 export const decisionLabel = ({ placement, model, effort, confidence }) =>
   [placement, [model, effort].filter(Boolean).join(" · "), confidenceText(confidence)].filter(Boolean).join(" · ");

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DEFAULTS, isModLoaded, merge } from "../src/defaults.mjs";
 import { createProviders } from "../src/providers.mjs";
-import { REPO_ROOT, handlePrompt as run, pickSubagentModel } from "../src/relay.mjs";
+import { REPO_ROOT, handlePrompt as run, pickSubagent } from "../src/relay.mjs";
 
 const handlePrompt = async (args) => (await run(args))?.context ?? null;
 
@@ -40,7 +40,7 @@ test("nudges to a subagent and caches the model pick", async () => {
   const out = await handlePrompt({ input, agent: "claude", config, deps });
   assert.match(out, /subagent with model haiku/);
   assert.equal(store.get("s").model.value, "haiku");
-  assert.equal(await pickSubagentModel({ input: { session_id: "s", tool_input: { prompt: "p" } }, agent: "claude", config, deps }), "haiku");
+  assert.deepEqual(await pickSubagent({ input: { session_id: "s", tool_input: { prompt: "p" } }, agent: "claude", config, deps }), { model: "haiku", effort: null });
 });
 
 test("a remote verdict below minConfidence is treated as inline", async () => {
@@ -152,27 +152,34 @@ test("disabled agent does nothing", async () => {
   const config = merge(DEFAULTS, { agents: { claude: { enabled: false } } });
   const { deps } = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku" }, true), heuristics } });
   assert.equal(await handlePrompt({ input, agent: "claude", config, deps }), null);
-  assert.equal(await pickSubagentModel({ input: { tool_input: { prompt: "p" } }, agent: "claude", config, deps }), null);
+  assert.equal(await pickSubagent({ input: { tool_input: { prompt: "p" } }, agent: "claude", config, deps }), null);
 });
 
 test("codex gets nudges with its sibling command and never a subagent model pick", async () => {
   const { deps, config } = setup({ providers: { jev: answer({ placement: "sibling", model: "sonnet" }, true), heuristics }, snapshot: priorTurn });
   assert.match(await handlePrompt({ input, agent: "codex", config, deps }), /codex exec/);
-  assert.equal(await pickSubagentModel({ input: { tool_input: { prompt: "p" } }, agent: "codex", config, deps }), null);
+  assert.equal(await pickSubagent({ input: { tool_input: { prompt: "p" } }, agent: "codex", config, deps }), null);
 });
 
 test("subagent model pick stays out of the way when the session runs on the Jev Router model", async () => {
   const { deps, config } = setup({ providers: { jev: answer({ placement: "inline", model: "opus" }, true), heuristics } });
   deps.env = { ANTHROPIC_CUSTOM_MODEL_OPTION_NAME: "Jev Router" };
-  assert.equal(await pickSubagentModel({ input: { session_id: "n", cwd: "/x", tool_input: { prompt: "p" } }, agent: "claude", config, deps }), null);
+  assert.equal(await pickSubagent({ input: { session_id: "n", cwd: "/x", tool_input: { prompt: "p" } }, agent: "claude", config, deps }), null);
 });
 
 test("subagent model pick skips explicit models and forks, and classifies on a cache miss", async () => {
   const { deps, config } = setup({ providers: { jev: answer({ placement: "inline", model: "opus" }, true), heuristics } });
-  const call = (tool_input) => pickSubagentModel({ input: { session_id: "n", cwd: "/x", tool_input }, agent: "claude", config, deps });
+  const call = (tool_input) => pickSubagent({ input: { session_id: "n", cwd: "/x", tool_input }, agent: "claude", config, deps });
   assert.equal(await call({ prompt: "p", model: "haiku" }), null);
   assert.equal(await call({ prompt: "p", subagent_type: "fork" }), null);
-  assert.equal(await call({ prompt: "p" }), "opus");
+  assert.deepEqual(await call({ prompt: "p" }), { model: "opus", effort: null });
+});
+
+test("subagent pick carries the classifier's effort, unless the call sets one", async () => {
+  const { deps, config } = setup({ providers: { jev: answer({ placement: "inline", model: "haiku", effort: "low" }, true), heuristics } });
+  const call = (tool_input) => pickSubagent({ input: { session_id: "e", cwd: "/x", tool_input }, agent: "claude", config, deps });
+  assert.deepEqual(await call({ prompt: "p" }), { model: "haiku", effort: "low" });
+  assert.deepEqual(await call({ prompt: "p", effort: "high" }), { model: "haiku", effort: null });
 });
 
 test("each nudge carries a short user-facing notice, and the degraded warning has its own", async () => {

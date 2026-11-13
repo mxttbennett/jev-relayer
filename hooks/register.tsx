@@ -176,8 +176,8 @@ async function decide($: EngineInterface, prompt: string, trigger: string, isFir
   return { ...verdict, provider: fields.provider, context: signals.text }
 }
 
-const modelLabel = (model: string, description = '') =>
-  description.startsWith(`[${model}] `) ? description : `[${model}] ${description}`.trimEnd()
+const modelLabel = (tag: string, description = '') =>
+  description.startsWith(`[${tag}] `) ? description : `[${tag}] ${description}`.trimEnd()
 
 async function spawnSibling($: EngineInterface, prompt: string, model: string, toolset: string | null, title?: string) {
   const cwd = await $.session.cwd()
@@ -201,7 +201,9 @@ async function act($: EngineInterface, prompt: string, decision: Decision): Prom
   const model = decision.model ?? 'sonnet'
   if (decision.placement === 'subagent') {
     const brief = decision.context && decision.context !== `user: ${prompt}` ? `${decision.context}\n\nYou are a subagent. Answer the last user message above, using the earlier turns as context.` : prompt
-    const started = await $.agent.spawn({ prompt: brief, model, subagentType: decision.agent ?? 'general-purpose', description: modelLabel(model, decision.title ?? taskLabel(prompt)) }).catch(() => null)
+    const effort = isEngineEffort(decision.effort) ? decision.effort : null
+    const tag = [model, effort].filter(Boolean).join(' · ')
+    const started = await $.agent.spawn({ prompt: brief, model, ...(effort ? { effort } : {}), subagentType: decision.agent ?? 'general-purpose', description: modelLabel(tag, decision.title ?? taskLabel(prompt)) }).catch(() => null)
     if (started && 'agentId' in started && started.agentId) {
       state.spawned.add(started.agentId)
       state.handedOff = true
@@ -360,14 +362,19 @@ export const register: Register = on => {
       void record($, { event: 'action', placement: 'subagent', outcome: 'duplicate-denied', subagentType: e.subagentType ?? null })
       return { deny: 'jev-relayer already started a subagent for this request; reply in one line and stop. Its result arrives when it finishes.' }
     }
-    const labeled = (spawn: typeof e, model?: string | null) => (model ? { ...spawn, description: modelLabel(model, spawn.description) } : spawn)
-    if (e.fork || e.model || !isOn() || isSelfRouted(state.env)) return next(labeled(e, e.model))
+    const labeled = (spawn: typeof e, model?: string | null, effort?: string | null) => {
+      const tag = [model, effort].filter(Boolean).join(' · ')
+      return tag ? { ...spawn, description: modelLabel(tag, spawn.description) } : spawn
+    }
+    if (e.fork || e.model || !isOn() || isSelfRouted(state.env)) return next(labeled(e, e.model, e.effort))
     const raced = await withinDeadline($, decide($, e.prompt, 'spawn').catch(logFailure($, 'spawn')))
     const decision = raced === MISSED ? null : raced
     if (raced === MISSED) void record($, { event: 'deadline-miss', where: 'spawn', deadlineMs: DEADLINE_MS })
-    void record($, { event: 'spawn-model', picked: decision?.model ?? null })
-    const picked = decision?.model ? { ...e, model: decision.model } : e
-    return next(labeled(picked, picked.model))
+    void record($, { event: 'spawn-model', picked: decision?.model ?? null, effort: decision?.effort ?? null })
+    const model = decision?.model ?? null
+    const effort = decision && isEngineEffort(decision.effort) && e.effort === undefined ? decision.effort : null
+    const picked = model || effort ? { ...e, ...(model ? { model } : {}), ...(effort ? { effort } : {}) } : e
+    return next(labeled(picked, picked.model, picked.effort))
   })
 
   on('tool.call', async ($, e, next) => {
