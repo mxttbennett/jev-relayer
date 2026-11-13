@@ -239,6 +239,7 @@ export const register: Register = on => {
     state.lastStopAt = 0
     state.lastWasDowngrade = false
     state.siblingQuietUntil = 0
+    state.handedOff = false
     state.baseline = await $.session.model()
     return next(e)
   })
@@ -367,6 +368,12 @@ export const register: Register = on => {
     void record($, { event: 'spawn-model', picked: decision?.model ?? null })
     const picked = decision?.model ? { ...e, model: decision.model } : e
     return next(labeled(picked, picked.model))
+  })
+
+  on('tool.call', async ($, e, next) => {
+    if (!state.handedOff || e.agentId || e.tool === 'Agent') return next(e)
+    void record($, { event: 'action', placement: 'subagent', outcome: 'tool-denied', tool: e.tool })
+    return { deny: 'jev-relayer handed this request to a subagent; reply in one line and stop. Its result arrives when it finishes.' }
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {

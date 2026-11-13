@@ -235,6 +235,69 @@ describe('delegation in the mod', () => {
       // Assert
       expect(out.deny).toBeUndefined()
     })
+
+    const call = ($: any, e: any) => handlers.get('tool.call')!($, { tool_use_id: 'u1', ...e }, async (x: unknown) => x)
+
+    test('denies the main loop its other tools in the same turn', async () => {
+      // Arrange
+      const { $, records } = await relayed()
+      // Act
+      const bash = await call($, { tool: 'Bash', command: 'ls' })
+      const skill = await call($, { tool: 'Skill', skill: 'pr-screenshots' })
+      // Assert
+      expect(bash.deny).toContain('jev-relayer handed this request to a subagent')
+      expect(skill.deny).toContain('jev-relayer handed this request to a subagent')
+      await Bun.sleep(0)
+      expect(actions(records)).toEqual(['spawned', 'tool-denied', 'tool-denied'])
+    })
+
+    test("lets the subagent's own tools through", async () => {
+      // Arrange
+      const { $ } = await relayed()
+      // Act
+      const out = await call($, { tool: 'Bash', command: 'ls', agentId: 'a1' })
+      // Assert
+      expect(out.deny).toBeUndefined()
+    })
+
+    test('leaves the Agent tool to the agent.spawn guard', async () => {
+      // Arrange
+      const { $ } = await relayed()
+      // Act
+      const out = await call($, { tool: 'Agent', prompt: 'x' })
+      // Assert
+      expect(out.deny).toBeUndefined()
+    })
+
+    test('allows tools again once the main turn completes', async () => {
+      // Arrange
+      const { $ } = await relayed()
+      await handlers.get('turn.complete')!($, { turnId: 't1' }, async (e: unknown) => e)
+      // Act
+      const out = await call($, { tool: 'Bash', command: 'ls' })
+      // Assert
+      expect(out.deny).toBeUndefined()
+    })
+
+    test('allows tools again in a new session', async () => {
+      // Arrange
+      const { $ } = await relayed()
+      await startSession($)
+      // Act
+      const out = await call($, { tool: 'Bash', command: 'ls' })
+      // Assert
+      expect(out.deny).toBeUndefined()
+    })
+  })
+
+  test('tools pass when no subagent was spawned', async () => {
+    // Arrange
+    const { $ } = engine({ model: 'opus', contextTokens: 5_000 })
+    await startSession($)
+    // Act
+    const out = await handlers.get('tool.call')!($, { tool: 'Bash', tool_use_id: 'u1' }, async (x: unknown) => x)
+    // Assert
+    expect(out.deny).toBeUndefined()
   })
 
   test('an approved sibling runs claude --bg with the toolset flags', async () => {
