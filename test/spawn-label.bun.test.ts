@@ -2,6 +2,16 @@ import { describe, expect, test } from 'bun:test'
 
 import { engine, handlers, startSession, typedTurn } from './mod-harness.ts'
 
+async function subagentStep($: any, agentId: string) {
+  let forwarded: any
+  const next = (e: any) => {
+    forwarded = e
+    return Object.assign((async function* () {})(), { result: Promise.resolve('done') })
+  }
+  for await (const _ of handlers.get('turn.step')!($, { turnId: 's1', index: 0, agentId, effort: 'xhigh' }, next)) void _
+  return forwarded
+}
+
 describe('model label on spawned subagents', () => {
   test('labels a subagent the relay starts with the model it picked', async () => {
     // Arrange
@@ -26,7 +36,30 @@ describe('model label on spawned subagents', () => {
     // Act
     await typedTurn($, 'find every caller of parse', 't2')
     // Assert
-    expect(spawns[0]).toMatchObject({ model: 'haiku', effort: 'high', description: '[haiku · high] find every caller of parse' })
+    expect(spawns[0]).toMatchObject({ model: 'haiku', description: '[haiku · high] find every caller of parse' })
+    expect((await subagentStep($, 'a6')).effort).toBe('high')
+  })
+
+  test('sets the effort the classifier picks on an Agent call\'s turns', async () => {
+    // Arrange
+    const { $ } = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku' })
+    await startSession($)
+    // Act
+    await handlers.get('agent.spawn')!($, { prompt: 'find every caller of parse', description: 'Find callers' }, async () => ({ agentId: 'a8', model: 'claude-haiku-5-5' }))
+    // Assert
+    expect((await subagentStep($, 'a8')).effort).toBe('low')
+  })
+
+  test('leaves a subagent\'s effort alone once it has finished', async () => {
+    // Arrange
+    const { $ } = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku' })
+    await startSession($)
+    await handlers.get('agent.spawn')!($, { prompt: 'find every caller of parse', description: 'Find callers' }, async () => ({ agentId: 'a9', model: 'claude-haiku-5-5' }))
+    await handlers.get('turn.complete')!($, { turnId: 's1', agentId: 'a9' }, async (e: unknown) => e)
+    // Act
+    const step = await subagentStep($, 'a9')
+    // Assert
+    expect(step.effort).toBe('xhigh')
   })
 
   test('labels an Agent call with the model the call asks for', async () => {

@@ -34,6 +34,7 @@ const state = {
   pending: new Map<string, Promise<Decision | null>>(),
   byText: new Map<string, Promise<Decision | null>>(),
   spawned: new Set<string>(),
+  agentEffort: new Map<string, EngineEffort>(),
   handedOff: false,
   typedPrompts: 0,
   lastStopAt: 0,
@@ -177,7 +178,7 @@ async function decide($: EngineInterface, prompt: string, trigger: string, isFir
 }
 
 const modelLabel = (tag: string, description = '') =>
-  description.startsWith(`[${tag}] `) ? description : `[${tag}] ${description}`.trimEnd()
+  description.startsWith(`[${tag}] `) || description.startsWith(`[${tag} · `) ? description : `[${tag}] ${description}`.trimEnd()
 
 async function spawnSibling($: EngineInterface, prompt: string, model: string, toolset: string | null, title?: string) {
   const cwd = await $.session.cwd()
@@ -203,9 +204,10 @@ async function act($: EngineInterface, prompt: string, decision: Decision): Prom
     const brief = decision.context && decision.context !== `user: ${prompt}` ? `${decision.context}\n\nYou are a subagent. Answer the last user message above, using the earlier turns as context.` : prompt
     const effort = isEngineEffort(decision.effort) ? decision.effort : null
     const tag = [model, effort].filter(Boolean).join(' · ')
-    const started = await $.agent.spawn({ prompt: brief, model, ...(effort ? { effort } : {}), subagentType: decision.agent ?? 'general-purpose', description: modelLabel(tag, decision.title ?? taskLabel(prompt)) }).catch(() => null)
+    const started = await $.agent.spawn({ prompt: brief, model, subagentType: decision.agent ?? 'general-purpose', description: modelLabel(tag, decision.title ?? taskLabel(prompt)) }).catch(() => null)
     if (started && 'agentId' in started && started.agentId) {
       state.spawned.add(started.agentId)
+      if (effort) state.agentEffort.set(started.agentId, effort)
       state.handedOff = true
       void record($, { event: 'action', placement: 'subagent', outcome: 'spawned', model })
       return `jev-relayer: reply with exactly "jev-relayer: started a subagent (${started.model}) for this request." and stop; its result arrives when it finishes.`
@@ -281,7 +283,11 @@ export const register: Register = on => {
   })
 
   on('turn.step', async function* ($, e, next) {
-    if (e.agentId !== undefined || state.isManual) return yield* next(e)
+    if (e.agentId !== undefined) {
+      const effort = state.agentEffort.get(e.agentId)
+      return yield* next(effort && e.effort !== undefined ? { ...e, effort } : e)
+    }
+    if (state.isManual) return yield* next(e)
     if (!isOn()) {
       if (e.index === 0) void publish($, {})
       return yield* next(e)
@@ -347,6 +353,7 @@ export const register: Register = on => {
   on('turn.complete', async ($, e, next) => {
     state.pending.delete(e.turnId)
     if (!e.agentId) state.handedOff = false
+    if (e.agentId) state.agentEffort.delete(e.agentId)
     if (e.agentId && state.spawned.delete(e.agentId) && e.answer) {
       if (e.answer.length <= MISSING_CONTEXT_MAX_CHARS && MISSING_CONTEXT.test(e.answer)) {
         void record($, { event: 'action', placement: 'subagent', outcome: 'result-skipped' })
@@ -366,15 +373,16 @@ export const register: Register = on => {
       const tag = [model, effort].filter(Boolean).join(' · ')
       return tag ? { ...spawn, description: modelLabel(tag, spawn.description) } : spawn
     }
-    if (e.fork || e.model || !isOn() || isSelfRouted(state.env)) return next(labeled(e, e.model, e.effort))
+    if (e.fork || e.model || !isOn() || isSelfRouted(state.env)) return next(labeled(e, e.model))
     const raced = await withinDeadline($, decide($, e.prompt, 'spawn').catch(logFailure($, 'spawn')))
     const decision = raced === MISSED ? null : raced
     if (raced === MISSED) void record($, { event: 'deadline-miss', where: 'spawn', deadlineMs: DEADLINE_MS })
     void record($, { event: 'spawn-model', picked: decision?.model ?? null, effort: decision?.effort ?? null })
     const model = decision?.model ?? null
-    const effort = decision && isEngineEffort(decision.effort) && e.effort === undefined ? decision.effort : null
-    const picked = model || effort ? { ...e, ...(model ? { model } : {}), ...(effort ? { effort } : {}) } : e
-    return next(labeled(picked, picked.model, picked.effort))
+    const effort = decision && isEngineEffort(decision.effort) ? decision.effort : null
+    const started = await next(labeled(model ? { ...e, model } : e, model ?? e.model, effort))
+    if (effort && started && 'agentId' in started && started.agentId) state.agentEffort.set(started.agentId, effort)
+    return started
   })
 
   on('tool.call', async ($, e, next) => {

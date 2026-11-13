@@ -119,7 +119,7 @@ describe('delegation in the mod', () => {
     // Act
     await typedTurn($, 'find every caller of parse', 't1', seen)
     // Assert
-    expect(spawns).toEqual([{ prompt: 'find every caller of parse', model: 'haiku', effort: 'low', subagentType: 'Explore', description: '[haiku · low] find every caller of parse' }])
+    expect(spawns).toEqual([{ prompt: 'find every caller of parse', model: 'haiku', subagentType: 'Explore', description: '[haiku · low] find every caller of parse' }])
     expect(seen.submitted.context).toEqual(['jev-relayer: reply with exactly "jev-relayer: started a subagent (claude-haiku) for this request." and stop; its result arrives when it finishes.'])
     expect(actions(records)).toEqual(['spawned'])
   })

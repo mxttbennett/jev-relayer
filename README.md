@@ -237,8 +237,10 @@ Where it applies:
 - **Mod, inline verdicts only.** The mod sets the effort on the turn, together with the model, when
   the session model takes an effort. The effort applies even when a model switch is blocked by the
   cache rules, so a session can stay on `opus` and still drop to `low`.
-- **Subagent verdicts** set the effort on the Agent call, with the model. A call that sets its own
-  `effort` keeps it. A subagent picked from the cache carries no effort, since the cache stores only the model.
+- **Subagent verdicts** set the effort with the model. The hooks set it on the Agent call, and a call
+  that sets its own `effort` keeps it. The mod cannot change effort at spawn, so it sets it on each of
+  the subagent's turns instead; it routes only calls that name no model, and overrides their effort.
+  A subagent picked from the cache carries no effort, since the cache stores only the model.
 - **Not applied** to sibling verdicts, to Codex, or to heuristic verdicts, which carry no effort.
   Verdicts under `minConfidence` are treated as inline with no pick.
 - **Manual override wins.** After you run `/model`, routing stops for that session, effort included.
