@@ -343,6 +343,7 @@ export const register: Register = on => {
         })
         state.lastStopAt = Date.now()
         state.lastWasDowngrade = downgrade
+        if (chunk.stopReason === 'end_turn') state.handedOff = false
         if (picked && served) void publish($, { tier: tierOf(served) ?? served.toLowerCase(), model: served, effort })
       }
       yield chunk
@@ -354,7 +355,9 @@ export const register: Register = on => {
     state.pending.delete(e.turnId)
     if (!e.agentId) state.handedOff = false
     if (e.agentId) state.agentEffort.delete(e.agentId)
-    if (e.agentId && state.spawned.delete(e.agentId) && e.answer) {
+    const finishedSpawn = Boolean(e.agentId) && state.spawned.delete(e.agentId!)
+    if (finishedSpawn) state.handedOff = false
+    if (finishedSpawn && e.answer) {
       if (e.answer.length <= MISSING_CONTEXT_MAX_CHARS && MISSING_CONTEXT.test(e.answer)) {
         void record($, { event: 'action', placement: 'subagent', outcome: 'result-skipped' })
         return next(e)
@@ -367,7 +370,7 @@ export const register: Register = on => {
   on('agent.spawn', async ($, e, next) => {
     if (state.handedOff && !e.parentAgentId) {
       void record($, { event: 'action', placement: 'subagent', outcome: 'duplicate-denied', subagentType: e.subagentType ?? null })
-      return { deny: 'jev-relayer already started a subagent for this request; reply in one line and stop. Its result arrives when it finishes.' }
+      return { deny: 'jev-relayer already started a subagent for this request and it is running now. Its result arrives when it finishes.' }
     }
     const labeled = (spawn: typeof e, model?: string | null, effort?: string | null) => {
       const tag = [model, effort].filter(Boolean).join(' · ')
@@ -388,7 +391,7 @@ export const register: Register = on => {
   on('tool.call', async ($, e, next) => {
     if (!state.handedOff || e.agentId || e.tool === 'Agent') return next(e)
     void record($, { event: 'action', placement: 'subagent', outcome: 'tool-denied', tool: e.tool })
-    return { deny: 'jev-relayer handed this request to a subagent; reply in one line and stop. Its result arrives when it finishes.' }
+    return { deny: 'jev-relayer handed this request to a subagent, which is running it now. Tools are blocked in this session until its reply ends; the result arrives when the subagent finishes.' }
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
