@@ -5,13 +5,13 @@ export type Vars = Record<string, string | undefined>
 
 export const DEADLINE_MS = 4000
 
-export const fetchLike =
-  ($: EngineInterface) =>
-  async (url: string, init: { method?: string; headers?: Record<string, string>; body?: string; timeoutMs: number }) => {
+export function fetchLike($: EngineInterface) {
+  return async (url: string, init: { method?: string; headers?: Record<string, string>; body?: string; timeoutMs: number }) => {
     const timeout = new Promise<never>((_, reject) => $.clock.after(init.timeoutMs, () => reject(new Error('timeout'))))
     const res = await Promise.race([$.http.fetch(url, { method: init.method, headers: init.headers, body: init.body }), timeout])
     return { ok: res.ok, status: res.status, json: async () => JSON.parse(res.text) }
   }
+}
 
 export const isUnavailable = (err: unknown) => err instanceof TypeError || /unavailable|not available|CLI|ENOENT|failed to start/i.test(String(err))
 
@@ -23,8 +23,9 @@ export const MISSING_CONTEXT_MAX_CHARS = 600
 
 export const MISSED = Symbol('missed')
 
-export const withinDeadline = <T,>($: EngineInterface, pending: Promise<T> | undefined) =>
-  Promise.race([pending, new Promise<typeof MISSED>(resolve => $.clock.after(DEADLINE_MS, () => resolve(MISSED)))])
+export function withinDeadline<T>($: EngineInterface, pending: Promise<T> | undefined) {
+  return Promise.race([pending, new Promise<typeof MISSED>(resolve => $.clock.after(DEADLINE_MS, () => resolve(MISSED)))])
+}
 
 export const modelLabel = (tag: string, description = '') =>
   description.startsWith(`[${tag}] `) || description.startsWith(`[${tag} · `) ? description : `[${tag}] ${description}`.trimEnd()
