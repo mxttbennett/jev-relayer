@@ -33,6 +33,7 @@ function offeredChoices(config, agent) {
 function downgradeReason(raw, { heuristic, isFirstPrompt }, config) {
   const scored = !heuristic && raw.confidence != null;
   if (scored && raw.confidence < config.minConfidence) return "low-confidence";
+  if (raw.placement === "subagent") return scored && raw.confidence < config.subagentMinConfidence ? "weak-subagent" : null;
   if (raw.placement !== "sibling") return null;
   if (isFirstPrompt) return "first-prompt";
   return scored && raw.confidence < config.siblingMinConfidence ? "weak-sibling" : null;

@@ -263,6 +263,8 @@ any other level.
 - A remote verdict with confidence below `minConfidence` (default `0.6`) is treated as inline: no
   nudge and no model pick. Heuristic verdicts are not affected. A value outside 0–1 falls back to
   the default.
+- A subagent verdict needs at least `subagentMinConfidence` (default `0.85`), or it is treated as
+  inline.
 - A sibling verdict needs at least `siblingMinConfidence` (default `0.85`), or it is treated as
   inline. The first prompt of a session never gets a sibling verdict.
 

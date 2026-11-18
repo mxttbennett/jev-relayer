@@ -244,6 +244,17 @@ test("a sibling verdict below siblingMinConfidence is treated as inline, one abo
   assert.match(await handlePrompt({ input, agent: "claude", config: strong.config, deps: strong.deps }), /claude --bg/);
 });
 
+test("a subagent verdict below subagentMinConfidence is treated as inline, and the floor is configurable", async () => {
+  const verdict = answer({ placement: "subagent", model: "haiku", confidence: 0.7 }, true);
+  const weak = setup({ providers: { jev: verdict, heuristics } });
+  await run({ input, agent: "claude", config: weak.config, deps: weak.deps });
+  assert.equal(weak.logs[0].downgraded, "weak-subagent");
+  assert.equal(weak.logs[0].verdict.placement, "inline");
+  const lowered = setup({ providers: { jev: verdict, heuristics }, config: merge(DEFAULTS, { subagentMinConfidence: 0.65 }) });
+  await run({ input, agent: "claude", config: lowered.config, deps: lowered.deps });
+  assert.equal(lowered.logs[0].downgraded, undefined);
+});
+
 test("a low-confidence log entry keeps a redacted, truncated prompt, and a confident one does not", async () => {
   const low = setup({ providers: { jev: answer({ placement: "subagent", model: "haiku", confidence: 0.3 }, true), heuristics }, remote: "git@github.com:work/x.git" });
   const long = `ask about 1234567 ${"x".repeat(400)}`;
