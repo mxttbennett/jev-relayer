@@ -11,15 +11,14 @@ import { appliedNotice, bandLabel, decisionLabel } from '../src/nudge.mjs'
 import { configFile, jevEnvFile, legacyConfigFile, modLogFile, relayerEnvFile, stateDir } from '../src/paths.mjs'
 import { allowsInlineSwitch } from '../src/switching.mjs'
 import { isDowngrade, sameModel, tierOf } from '../src/tiers.mjs'
+import { dependsOnConversation } from '../src/heuristics.mjs'
 import { isCorrection } from '../src/regret.mjs'
 import { taskLabel } from '../src/task-label.mjs'
 import { memoryBreaker } from '../src/breaker.mjs'
 import { createBufferedLog } from '../src/buffered-log.mjs'
+import { DEADLINE_MS, MISSED, MISSING_CONTEXT, MISSING_CONTEXT_MAX_CHARS, fetchLike, isEngineEffort, isUnavailable, modelLabel, withinDeadline } from './support.ts'
+import type { Decision, EngineEffort, Vars } from './support.ts'
 
-type Decision = { placement: string; model: string | null; effort: string | null; toolset: string | null; agent?: string; title?: string; confidence: number | null; provider?: string; context?: string }
-type Vars = Record<string, string | undefined>
-
-const DEADLINE_MS = 4000
 const SIBLING_QUIET_PROMPTS = 10
 
 const breaker = memoryBreaker()
@@ -44,14 +43,6 @@ const state = {
   missed: new WeakSet<object>(),
   logs: new Map<string, (entry: Record<string, unknown>) => Promise<void>>(),
 }
-
-const fetchLike =
-  ($: EngineInterface) =>
-  async (url: string, init: { method?: string; headers?: Record<string, string>; body?: string; timeoutMs: number }) => {
-    const timeout = new Promise<never>((_, reject) => $.clock.after(init.timeoutMs, () => reject(new Error('timeout'))))
-    const res = await Promise.race([$.http.fetch(url, { method: init.method, headers: init.headers, body: init.body }), timeout])
-    return { ok: res.ok, status: res.status, json: async () => JSON.parse(res.text) }
-  }
 
 async function load($: EngineInterface) {
   const home = (await $.env.get('HOME')) ?? ''
@@ -84,20 +75,8 @@ async function remoteOf($: EngineInterface, cwd: string) {
   }
 }
 
-const isUnavailable = (err: unknown) => err instanceof TypeError || /unavailable|not available|CLI|ENOENT|failed to start/i.test(String(err))
-
 const TYPED_ORIGINS = ['composer', 'bridge', 'sdk']
 const RESULT_PREFIX = 'jev-relayer: the subagent finished.'
-const ENGINE_EFFORTS = ['low', 'medium', 'high', 'xhigh'] as const
-type EngineEffort = (typeof ENGINE_EFFORTS)[number]
-const isEngineEffort = (effort: string | null | undefined): effort is EngineEffort => ENGINE_EFFORTS.some(known => known === effort)
-const MISSING_CONTEXT = /\b(lack|lacking|missing|without|(?:do not|don't|doesn't|does not|cannot|can't) (?:have|see|tell))\b[^.\n]{0,40}\b(context|conversation|earlier turns|previous turns)\b/i
-const MISSING_CONTEXT_MAX_CHARS = 600
-const MISSED = Symbol('missed')
-
-const withinDeadline = <T,>($: EngineInterface, pending: Promise<T> | undefined) =>
-  Promise.race([pending, new Promise<typeof MISSED>(resolve => $.clock.after(DEADLINE_MS, () => resolve(MISSED)))])
-
 const isOn = () => isEnabled(state.config, 'claude', state.env)
 
 const logFailure = ($: EngineInterface, where: string) => (err: unknown) => {
@@ -177,9 +156,6 @@ async function decide($: EngineInterface, prompt: string, trigger: string, isFir
   return { ...verdict, provider: fields.provider, context: signals.text }
 }
 
-const modelLabel = (tag: string, description = '') =>
-  description.startsWith(`[${tag}] `) || description.startsWith(`[${tag} · `) ? description : `[${tag}] ${description}`.trimEnd()
-
 async function spawnSibling($: EngineInterface, prompt: string, model: string, toolset: string | null, title?: string) {
   const cwd = await $.session.cwd()
   const flags = siblingFlags('claude', toolset, state.config, state.home)
@@ -198,9 +174,13 @@ async function spawnSibling($: EngineInterface, prompt: string, model: string, t
   }
 }
 
-async function act($: EngineInterface, prompt: string, decision: Decision): Promise<string | null> {
+async function act($: EngineInterface, prompt: string, decision: Decision, attachments: readonly unknown[] = []): Promise<string | null> {
   const model = decision.model ?? 'sonnet'
   if (decision.placement === 'subagent') {
+    if (dependsOnConversation(prompt, attachments)) {
+      void record($, { event: 'action', placement: 'subagent', outcome: 'kept-inline', model })
+      return null
+    }
     const brief = decision.context && decision.context !== `user: ${prompt}` ? `${decision.context}\n\nYou are a subagent. Answer the last user message above, using the earlier turns as context.` : prompt
     const effort = isEngineEffort(decision.effort) ? decision.effort : null
     const tag = [model, effort].filter(Boolean).join(' · ')
@@ -278,7 +258,7 @@ export const register: Register = on => {
       state.missed.add(pending)
       void record($, { event: 'deadline-miss', where: 'submit', deadlineMs: DEADLINE_MS })
     }
-    const directive = decision && decision !== MISSED ? await act($, e.text, decision).catch(logFailure($, 'act')) : null
+    const directive = decision && decision !== MISSED ? await act($, e.text, decision, e.attachments).catch(logFailure($, 'act')) : null
     return next(directive ? { ...e, context: [...(e.context ?? []), directive] } : e)
   })
 

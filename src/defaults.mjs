@@ -39,6 +39,7 @@ export const DEFAULTS = {
   },
   excerptTurns: 10,
   minConfidence: 0.6,
+  subagentMinConfidence: 0.85,
   siblingMinConfidence: 0.85,
   band: { enabled: false },
   statusNotice: true,
@@ -71,7 +72,7 @@ export function merge(base, override) {
 }
 
 const REPLACED_LISTS = ["efforts", "toolsets"];
-const UNIT_INTERVAL = ["minConfidence", "siblingMinConfidence"];
+const UNIT_INTERVAL = ["minConfidence", "subagentMinConfidence", "siblingMinConfidence"];
 
 export function resolveConfig(user = {}) {
   const config = merge(DEFAULTS, user);

@@ -1,7 +1,8 @@
 const PLACEMENTS = {
-  inline: "Needs the earlier reasoning or edits in this conversation, or is a small follow-up",
+  inline:
+    "Needs the earlier reasoning or edits in this conversation, is a small follow-up, or is a quick lookup a few commands answer (list issues, git status, read one file, a short question)",
   subagent:
-    "Self-contained, read-heavy work (searching or reviewing many files) where only the conclusion matters",
+    "Self-contained, read-heavy work across many files (searching or reviewing a codebase) where only the conclusion matters and doing it inline would flood this conversation. Never for quick lookups",
   sibling:
     "Independent of this conversation, long-running, or would bloat it with output nobody needs later",
 };

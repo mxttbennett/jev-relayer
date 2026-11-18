@@ -124,6 +124,22 @@ describe('delegation in the mod', () => {
     expect(actions(records)).toEqual(['spawned'])
   })
 
+  test('a prompt that points back at the conversation stays inline instead of spawning', async () => {
+    // Arrange
+    const spawns: any[] = []
+    const { $, records } = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku', placement: 'subagent', agent: 'Explore' }, {
+      agent: { spawn: async (input: any) => (spawns.push(input), { agentId: 'a1', model: 'claude-haiku' }) },
+    })
+    await startSession($)
+    const seen: any = {}
+    // Act
+    await typedTurn($, 'add them as a sub-issue under the 3966', 't1', seen)
+    // Assert
+    expect(spawns).toEqual([])
+    expect(seen.submitted.context).toBeUndefined()
+    expect(actions(records)).toEqual(['kept-inline'])
+  })
+
   test('a subagent gets the earlier turns of the conversation', async () => {
     // Arrange
     const spawns: any[] = []
