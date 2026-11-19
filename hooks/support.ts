@@ -29,3 +29,21 @@ export function withinDeadline<T>($: EngineInterface, pending: Promise<T> | unde
 
 export const modelLabel = (tag: string, description = '') =>
   description.startsWith(`[${tag}] `) || description.startsWith(`[${tag} · `) ? description : `[${tag}] ${description}`.trimEnd()
+
+const GIT_STATE = [['branch', ['branch', '--show-current']], ['status', ['status', '--short']], ['diff', ['diff', '--stat', 'HEAD']]] as const
+
+export async function repoState($: EngineInterface, cwd: string) {
+  const parts: string[] = []
+  for (const [label, args] of GIT_STATE) {
+    const ran = await $.process.run(['git', '-C', cwd, ...args], { timeoutMs: 3000 }).catch(() => null)
+    const out = ran?.exitCode === 0 ? String(ran.stdout ?? '').trim().slice(0, 1500) : ''
+    if (out) parts.push(`${label}:\n${out}`)
+  }
+  return parts.join('\n\n')
+}
+
+export function composeBrief(prompt: string, context: string | undefined, repo: string, role: string) {
+  const earlier = context && context !== `user: ${prompt}`
+  const note = `You are ${role} in the same repository. Tool results and attachments from the conversation are not included, so re-read files you need.`
+  return [earlier ? `## Conversation so far\n${context}` : `## Request\n${prompt}`, repo && `## Repository state\n${repo}`, `## Instructions\n${earlier ? 'Answer the last user message above, using the earlier turns as context. ' : ''}${note}`].filter(Boolean).join('\n\n')
+}

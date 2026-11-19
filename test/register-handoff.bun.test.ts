@@ -8,7 +8,7 @@ const actions = (records: () => any[]) => records().filter(r => r.event === 'act
 
 describe('after the relay spawned a subagent', () => {
   const relayed = async () => {
-    const env = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku', placement: 'subagent' }, {
+    const env = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku', placement: 'subagent', agent: 'Explore' }, {
       agent: { spawn: async () => ({ agentId: 'a1', model: 'claude-haiku' }) },
       prompt: { submit: async () => undefined },
     })

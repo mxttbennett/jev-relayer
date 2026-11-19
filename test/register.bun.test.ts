@@ -119,7 +119,7 @@ describe('delegation in the mod', () => {
     // Act
     await typedTurn($, 'find every caller of parse', 't1', seen)
     // Assert
-    expect(spawns).toEqual([{ prompt: 'find every caller of parse', model: 'haiku', subagentType: 'Explore', description: '[haiku · low] find every caller of parse' }])
+    expect(spawns).toEqual([{ prompt: expect.stringContaining('## Request\nfind every caller of parse'), model: 'haiku', subagentType: 'Explore', description: '[haiku · low] find every caller of parse' }])
     expect(seen.submitted.context).toEqual(['jev-relayer: reply with exactly "jev-relayer: started a subagent (claude-haiku) for this request." and stop; its result arrives when it finishes.'])
     expect(actions(records)).toEqual(['spawned'])
   })
@@ -154,12 +154,13 @@ describe('delegation in the mod', () => {
     // Act
     await typedTurn($, 'did that create one more subagent', 't1')
     // Assert
-    expect(spawns[0].prompt).toBe('user: why is parse slow\n\nassistant: it re-reads the file\n\nuser: did that create one more subagent\n\nYou are a subagent. Answer the last user message above, using the earlier turns as context.')
+    expect(spawns[0].prompt).toContain('## Conversation so far\nuser: why is parse slow\n\nassistant: it re-reads the file\n\nuser: did that create one more subagent')
+    expect(spawns[0].prompt).toContain('## Repository state')
   })
 
   test('a failed subagent spawn asks the model to delegate instead', async () => {
     // Arrange
-    const { $, records } = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku', placement: 'subagent' }, {
+    const { $, records } = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku', placement: 'subagent', agent: 'Explore' }, {
       agent: { spawn: async () => { throw new Error('no') } },
     })
     await startSession($)
@@ -167,14 +168,14 @@ describe('delegation in the mod', () => {
     // Act
     await typedTurn($, 'find every caller of parse', 't1', seen)
     // Assert
-    expect(seen.submitted.context).toEqual(['jev-relayer: delegate this request to a subagent (model haiku) with the Agent tool, using Explore for read-only searches. Do not do the work in this conversation.'])
+    expect(seen.submitted.context).toEqual(['jev-relayer: delegate this request to a subagent (model haiku) with the Agent tool, using Explore. Do not do the work in this conversation.'])
     expect(actions(records)).toEqual(['delegated-to-model'])
   })
 
   test('the result of a spawned subagent comes back as a prompt', async () => {
     // Arrange
     const submitted: string[] = []
-    const { $ } = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku', placement: 'subagent' }, {
+    const { $ } = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku', placement: 'subagent', agent: 'Explore' }, {
       agent: { spawn: async () => ({ agentId: 'a1', model: 'claude-haiku' }) },
       prompt: { submit: async ({ text }: any) => void submitted.push(text) },
     })
@@ -189,7 +190,7 @@ describe('delegation in the mod', () => {
   describe('a spawned subagent result', () => {
     const finish = async (answer: string) => {
       const submitted: string[] = []
-      const { $, records } = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku', placement: 'subagent' }, {
+      const { $, records } = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku', placement: 'subagent', agent: 'Explore' }, {
         agent: { spawn: async () => ({ agentId: 'a1', model: 'claude-haiku' }) },
         prompt: { submit: async ({ text }: any) => void submitted.push(text) },
       })
@@ -236,7 +237,7 @@ describe('delegation in the mod', () => {
     // Act
     await typedTurn($, 'clean up the old branches', 't2', seen)
     // Assert
-    expect(runs.filter(argv => argv[0] === 'claude')).toEqual([['claude', '--bg', '--model', 'sonnet', '--strict-mcp-config', '--tools', 'Read,Grep', '--', 'clean up the old branches']])
+    expect(runs.filter(argv => argv[0] === 'claude')).toEqual([['claude', '--bg', '--model', 'sonnet', '--strict-mcp-config', '--tools', 'Read,Grep', '--', expect.stringContaining('## Request\nclean up the old branches')]])
     expect(seen.submitted.context).toEqual(["jev-relayer: the user's request was handed to a background session (sonnet). Reply with one short sentence saying so and stop; do not do the work here."])
     expect(actions(records)).toEqual(['accepted'])
   })
@@ -254,7 +255,7 @@ describe('delegation in the mod', () => {
     // Act
     await typedTurn($, 'clean up the old branches', 't2')
     // Assert
-    expect(spawns).toEqual([{ prompt: 'clean up the old branches', model: 'sonnet', subagentType: 'general-purpose', name: 'jev-sibling', description: '[sonnet] clean up the old branches', cwd: '/repo' }])
+    expect(spawns).toEqual([{ prompt: expect.stringContaining('clean up the old branches'), model: 'sonnet', subagentType: 'general-purpose', name: 'jev-sibling', description: '[sonnet] clean up the old branches', cwd: '/repo' }])
     expect(actions(records)).toEqual(['accepted'])
   })
 

@@ -285,6 +285,8 @@ test("a prompt with attachments or a back-reference depends on the conversation"
   assert.equal(dependsOnConversation("add them as a sub-issue", []), true);
   assert.equal(dependsOnConversation("what does this say", image), true);
   assert.equal(dependsOnConversation("see the screenshot", []), true);
+  assert.equal(dependsOnConversation("yes /deep-plan -pr (same PR)", []), true);
+  assert.equal(dependsOnConversation("go ahead", []), true);
   assert.equal(dependsOnConversation("find every caller of parse", []), false);
   assert.equal(dependsOnConversation("find every caller of parse"), false);
 });

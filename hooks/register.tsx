@@ -16,7 +16,7 @@ import { isCorrection } from '../src/regret.mjs'
 import { taskLabel } from '../src/task-label.mjs'
 import { memoryBreaker } from '../src/breaker.mjs'
 import { createBufferedLog } from '../src/buffered-log.mjs'
-import { DEADLINE_MS, MISSED, MISSING_CONTEXT, MISSING_CONTEXT_MAX_CHARS, fetchLike, isEngineEffort, isUnavailable, modelLabel, withinDeadline } from './support.ts'
+import { DEADLINE_MS, MISSED, composeBrief, repoState, MISSING_CONTEXT, MISSING_CONTEXT_MAX_CHARS, fetchLike, isEngineEffort, isUnavailable, modelLabel, withinDeadline } from './support.ts'
 import type { Decision, EngineEffort, Vars } from './support.ts'
 
 const SIBLING_QUIET_PROMPTS = 10
@@ -156,8 +156,9 @@ async function decide($: EngineInterface, prompt: string, trigger: string, isFir
   return { ...verdict, provider: fields.provider, context: signals.text }
 }
 
-async function spawnSibling($: EngineInterface, prompt: string, model: string, toolset: string | null, title?: string) {
+async function spawnSibling($: EngineInterface, request: string, model: string, toolset: string | null, title?: string, context?: string) {
   const cwd = await $.session.cwd()
+  const prompt = composeBrief(request, context, await repoState($, cwd), 'a background session that may read and edit files')
   const flags = siblingFlags('claude', toolset, state.config, state.home)
   try {
     const ran = await $.process.run([...AGENTS.claude.siblingArgv(model, flags), prompt], { cwd, timeoutMs: 30_000 })
@@ -166,7 +167,7 @@ async function spawnSibling($: EngineInterface, prompt: string, model: string, t
     if (!isUnavailable(err)) return false
   }
   try {
-    const started = await $.agent.spawn({ prompt, model, subagentType: 'general-purpose', name: 'jev-sibling', description: modelLabel(model, title ?? taskLabel(prompt)), cwd })
+    const started = await $.agent.spawn({ prompt, model, subagentType: 'general-purpose', name: 'jev-sibling', description: modelLabel(model, title ?? taskLabel(request)), cwd })
     if ('agentId' in started && started.agentId) state.spawned.add(started.agentId)
     return 'agentId' in started
   } catch {
@@ -177,11 +178,11 @@ async function spawnSibling($: EngineInterface, prompt: string, model: string, t
 async function act($: EngineInterface, prompt: string, decision: Decision, attachments: readonly unknown[] = []): Promise<string | null> {
   const model = decision.model ?? 'sonnet'
   if (decision.placement === 'subagent') {
-    if (dependsOnConversation(prompt, attachments)) {
+    if (dependsOnConversation(prompt, attachments) || !(decision.agent === 'Explore' || decision.agent === 'Plan')) {
       void record($, { event: 'action', placement: 'subagent', outcome: 'kept-inline', model })
       return null
     }
-    const brief = decision.context && decision.context !== `user: ${prompt}` ? `${decision.context}\n\nYou are a subagent. Answer the last user message above, using the earlier turns as context.` : prompt
+    const brief = composeBrief(prompt, decision.context, await repoState($, await $.session.cwd()), 'a read-only subagent')
     const effort = isEngineEffort(decision.effort) ? decision.effort : null
     const tag = [model, effort].filter(Boolean).join(' · ')
     const started = await $.agent.spawn({ prompt: brief, model, subagentType: decision.agent ?? 'general-purpose', description: modelLabel(tag, decision.title ?? taskLabel(prompt)) }).catch(() => null)
@@ -206,7 +207,7 @@ async function act($: EngineInterface, prompt: string, decision: Decision, attac
     void record($, { event: 'action', placement: 'sibling', outcome: 'declined', model })
     return null
   }
-  if (!(await spawnSibling($, prompt, model, decision.toolset, decision.title))) {
+  if (!(await spawnSibling($, prompt, model, decision.toolset, decision.title, decision.context))) {
     void record($, { event: 'action', placement: 'sibling', outcome: 'spawn-failed', model })
     return null
   }
