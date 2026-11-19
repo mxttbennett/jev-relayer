@@ -6,9 +6,10 @@ const INDEPENDENT =
   /\b(unrelated|separate (task|thing)|different (task|thing)|new task|meanwhile|in the background)\b/i;
 
 const BACK_REFERENCE =
-  /\b(these|those|them|above|earlier|previous(ly)?|the (screenshot|image|picture|photo)|this (one|screenshot|image)|that one)\b/i;
+  /\b(these|those|them|above|earlier|previous(ly)?|the (screenshot|image|picture|photo)|this (one|screenshot|image)|that one|same (pr|branch|file|one|thing|issue|ticket|plan))\b/i;
+const REPLY = /^\s*(yes|yep|yeah|ok(ay)?|sure|go ahead|do it|proceed|continue|sounds good|lgtm)\b/i;
 
-export const dependsOnConversation = (prompt, attachments = []) => attachments.length > 0 || BACK_REFERENCE.test(prompt ?? "");
+export const dependsOnConversation = (prompt, attachments = []) => attachments.length > 0 || BACK_REFERENCE.test(prompt ?? "") || REPLY.test(prompt ?? "");
 
 function matches(patterns, prompt) {
   return patterns.some((source) => {

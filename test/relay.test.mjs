@@ -289,3 +289,10 @@ test("codex still classifies when the claude mod is loaded", async () => {
   deps.env = { CLAUDE_CODE_PLUGIN_DIRS: REPO_ROOT };
   assert.notEqual(await handlePrompt({ input, agent: "codex", config, deps }), null);
 });
+
+test("a subagent verdict for an editing agent type is treated as inline", async () => {
+  const { deps, config, logs } = setup({ providers: { jev: answer({ placement: "subagent", agent: "general-purpose", model: "opus", confidence: 0.95 }, true), heuristics } });
+  await run({ input, agent: "claude", config, deps });
+  assert.equal(logs[0].downgraded, "not-read-only");
+  assert.equal(logs[0].verdict.placement, "inline");
+});

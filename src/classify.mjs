@@ -5,6 +5,7 @@ import { emptyVerdict } from "./prompt.mjs";
 import { redact } from "./redact.mjs";
 import { toolsetDescriptions } from "./toolsets.mjs";
 
+const READ_ONLY_AGENTS = new Set(["Explore", "Plan"]);
 const TURN_CHARS = 1500;
 const TEXT_CHARS = 6000;
 const PROMPT_LOG_CHARS = 200;
@@ -33,6 +34,7 @@ function offeredChoices(config, agent) {
 function downgradeReason(raw, { heuristic, isFirstPrompt }, config) {
   const scored = !heuristic && raw.confidence != null;
   if (scored && raw.confidence < config.minConfidence) return "low-confidence";
+  if (raw.placement === "subagent" && raw.agent && !READ_ONLY_AGENTS.has(raw.agent)) return "not-read-only";
   if (raw.placement === "subagent") return scored && raw.confidence < config.subagentMinConfidence ? "weak-subagent" : null;
   if (raw.placement !== "sibling") return null;
   if (isFirstPrompt) return "first-prompt";
