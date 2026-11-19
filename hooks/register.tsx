@@ -137,6 +137,7 @@ async function decide($: EngineInterface, prompt: string, trigger: string, isFir
     prompt,
     agent: 'claude',
     contextTokens: (await $.session.usage()).context.tokens ?? 0,
+    currentModel: await $.session.model().catch(() => null),
     idleMs: 0,
     cwd,
     isFirstPrompt,
@@ -216,6 +217,13 @@ async function act($: EngineInterface, prompt: string, decision: Decision, attac
   return `jev-relayer: the user's request was handed to a background session (${model}). Reply with one short sentence saying so and stop; do not do the work here.`
 }
 
+async function resumeAtBaseline($: EngineInterface) {
+  if (!state.isManual || (await $.session.model().catch(() => null)) !== state.baseline) return
+  state.isManual = false
+  void record($, { event: 'resume' })
+  await publish($, {})
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await load($)
@@ -231,6 +239,7 @@ export const register: Register = on => {
 
   on('turn.start', async ($, e, next) => {
     const result = await next(e)
+    if (!e.agentId) await resumeAtBaseline($)
     if (e.agentId || state.isManual || !isOn() || e.text.trim() === '' || e.text.includes(RESULT_PREFIX)) return result
 
     const sessionModel = await $.session.model()
@@ -246,6 +255,7 @@ export const register: Register = on => {
   })
 
   on('prompt.submit', async ($, e, next) => {
+    await resumeAtBaseline($)
     if (!TYPED_ORIGINS.includes(e.origin.kind) || e.command || state.isManual || !isOn() || e.text.trim() === '' || e.text.includes(RESULT_PREFIX)) return next(e)
 
     state.handedOff = false
@@ -292,7 +302,7 @@ export const register: Register = on => {
     const wantsSwitch = picked !== null && !sameModel(picked, current)
     const contextTokens = wantsSwitch ? ((await $.session.usage().catch(() => null))?.context.tokens ?? 0) : 0
     const idleMs = state.lastStopAt ? Date.now() - state.lastStopAt : 0
-    const allowed = wantsSwitch && allowsInlineSwitch({ current, picked, contextTokens, idleMs }, state.config.gate)
+    const allowed = wantsSwitch && (decision?.explicit === true || allowsInlineSwitch({ current, picked, contextTokens, idleMs }, state.config.gate))
     const model = allowed ? picked : null
     const downgrade = Boolean(model) && isDowngrade(current, model)
     const wanted = decision?.placement === 'inline' ? decision.effort : null
