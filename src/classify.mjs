@@ -1,6 +1,7 @@
 import { AGENTS } from "./agents.mjs";
 import { runChain } from "./chain.mjs";
 import { profileFor } from "./defaults.mjs";
+import { lowConfidenceModel, nearestModel, overrideRank } from "./policy.mjs";
 import { emptyVerdict } from "./prompt.mjs";
 import { redact } from "./redact.mjs";
 import { toolsetDescriptions } from "./toolsets.mjs";
@@ -41,6 +42,12 @@ function downgradeReason(raw, { heuristic, isFirstPrompt }, config) {
   return scored && raw.confidence < config.siblingMinConfidence ? "weak-sibling" : null;
 }
 
+function inlineVerdict(raw, reason, currentModel, models) {
+  const verdict = emptyVerdict("inline", raw.confidence);
+  if (reason === "low-confidence" && raw.placement === "inline") verdict.model = lowConfidenceModel(raw.model, currentModel, Object.keys(models));
+  return verdict;
+}
+
 export async function classify(signals, config, deps) {
   const profile = profileFor(config, signals.cwd, deps.remoteOf);
   const { text, hits } = redact(signals.text, config.redact.names);
@@ -53,11 +60,17 @@ export async function classify(signals, config, deps) {
     contextTokens: signals.contextTokens,
     idleMs: signals.idleMs,
   };
+  const wanted = overrideRank(signals.prompt);
+  const explicit = wanted === null ? null : nearestModel(wanted, Object.keys(offered.model));
+  if (explicit) {
+    const verdict = { ...emptyVerdict("inline", 1), model: explicit, explicit: true };
+    return { verdict, heuristic: false, degraded: false, low: false, fields: { repoClass: profile.name, provider: "override", heuristic: false, verdict, degraded: false } };
+  }
   const result = await runChain(names, deps.providers, input, deps.breaker);
   const raw = result.verdict;
   const downgraded = downgradeReason(raw, { heuristic: result.heuristic, isFirstPrompt: signals.isFirstPrompt }, config);
   const low = downgraded === "low-confidence";
-  const verdict = downgraded ? emptyVerdict("inline", raw.confidence) : raw;
+  const verdict = downgraded ? inlineVerdict(raw, downgraded, signals.currentModel, offered.model) : raw;
   const prompt = low ? redact(signals.prompt, config.redact.names).text.slice(0, PROMPT_LOG_CHARS) : undefined;
   return {
     verdict,

@@ -157,3 +157,22 @@ test("a user efforts list replaces the default list, and an empty one stops the 
   assert.deepEqual(subset.efforts, { low: "quick" });
   assert.deepEqual(none.efforts, {});
 });
+
+test("a low-confidence inline pick survives only as a capped upgrade", async () => {
+  const pick = async (model, currentModel) => {
+    const providers = { jev: { remote: false, heuristic: false, run: async () => ({ placement: "inline", model, effort: "high", confidence: 0.2 }) } };
+    const config = merge(DEFAULTS, { chain: ["jev"] });
+    const { verdict } = await classify({ text: "x", prompt: "x", agent: "claude", cwd: "/x", currentModel }, config, { providers, remoteOf: () => "" });
+    return verdict.model;
+  };
+  assert.equal(await pick("opus", "haiku"), "sonnet");
+  assert.equal(await pick("haiku", "opus"), null);
+});
+
+test("a prompt that names a model skips the classifier and resolves to an offered model", async () => {
+  const providers = { jev: { remote: false, heuristic: false, run: async () => assert.fail("classifier ran") } };
+  const config = { ...merge(DEFAULTS, { chain: ["jev"] }), models: { claude: { haiku: "", opus: "" }, codex: {} } };
+  const { verdict } = await classify({ text: "x", prompt: "use sonnet here", agent: "claude", cwd: "/x" }, config, { providers, remoteOf: () => "" });
+  assert.equal(verdict.model, "opus");
+  assert.equal(verdict.explicit, true);
+});

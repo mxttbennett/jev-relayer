@@ -353,4 +353,28 @@ describe('manual model choice in the mod', () => {
     // Assert
     expect(step.model).toBe('haiku')
   })
+
+  test('picking the starting model again resumes routing', async () => {
+    // Arrange
+    const { $, scenario, records } = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku' })
+    await startSession($)
+    scenario.model = 'sonnet'
+    await typedTurn($, 'rename the variable', 't1')
+    scenario.model = 'opus'
+    // Act
+    const step = await typedTurn($, 'rename the variable', 't2')
+    // Assert
+    expect(step.model).toBe('haiku')
+    expect(records().filter(r => r.event === 'resume')).toHaveLength(1)
+  })
+
+  test('a named model beats the classifier and a cached downgrade block', async () => {
+    // Arrange
+    const { $ } = engine({ model: 'opus', contextTokens: 80_000 }, { model: 'opus' })
+    await startSession($)
+    // Act
+    const step = await typedTurn($, 'use haiku for this rename', 't1')
+    // Assert
+    expect(step.model).toBe('haiku')
+  })
 })

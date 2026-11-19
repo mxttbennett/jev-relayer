@@ -1,6 +1,6 @@
 import type { EngineInterface } from 'claude-code'
 
-export type Decision = { placement: string; model: string | null; effort: string | null; toolset: string | null; agent?: string; title?: string; confidence: number | null; provider?: string; context?: string }
+export type Decision = { placement: string; model: string | null; effort: string | null; toolset: string | null; agent?: string; title?: string; confidence: number | null; explicit?: boolean; provider?: string; context?: string }
 export type Vars = Record<string, string | undefined>
 
 export const DEADLINE_MS = 4000
