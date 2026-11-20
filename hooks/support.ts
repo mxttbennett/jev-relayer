@@ -42,8 +42,8 @@ export async function repoState($: EngineInterface, cwd: string) {
   return parts.join('\n\n')
 }
 
-export function composeBrief(prompt: string, context: string | undefined, repo: string, role: string) {
+export function composeBrief(prompt: string, context: string | undefined, repo: string, role: string, transcript: string) {
   const earlier = context && context !== `user: ${prompt}`
-  const note = `You are ${role} in the same repository. Tool results and attachments from the conversation are not included, so re-read files you need.`
+  const note = `You are ${role} in the same repository. The text above leaves out tool results and attachments. The main thread's full transcript, tool results included, is at ${transcript}: read it whenever you need more context, and re-read any files you need.`
   return [earlier ? `## Conversation so far\n${context}` : `## Request\n${prompt}`, repo && `## Repository state\n${repo}`, `## Instructions\n${earlier ? 'Answer the last user message above, using the earlier turns as context. ' : ''}${note}`].filter(Boolean).join('\n\n')
 }

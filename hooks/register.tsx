@@ -159,7 +159,7 @@ async function decide($: EngineInterface, prompt: string, trigger: string, isFir
 
 async function spawnSibling($: EngineInterface, request: string, model: string, toolset: string | null, title?: string, context?: string) {
   const cwd = await $.session.cwd()
-  const prompt = composeBrief(request, context, await repoState($, cwd), 'a background session that may read and edit files')
+  const prompt = composeBrief(request, context, await repoState($, cwd), 'a background session that may read and edit files', await transcriptFile($))
   const flags = siblingFlags('claude', toolset, state.config, state.home)
   try {
     const ran = await $.process.run([...AGENTS.claude.siblingArgv(model, flags), prompt], { cwd, timeoutMs: 30_000 })
@@ -183,7 +183,7 @@ async function act($: EngineInterface, prompt: string, decision: Decision, attac
       void record($, { event: 'action', placement: 'subagent', outcome: 'kept-inline', model })
       return null
     }
-    const brief = composeBrief(prompt, decision.context, await repoState($, await $.session.cwd()), 'a read-only subagent')
+    const brief = composeBrief(prompt, decision.context, await repoState($, await $.session.cwd()), 'a read-only subagent', await transcriptFile($))
     const effort = isEngineEffort(decision.effort) ? decision.effort : null
     const tag = [model, effort].filter(Boolean).join(' · ')
     const started = await $.agent.spawn({ prompt: brief, model, subagentType: decision.agent ?? 'general-purpose', description: modelLabel(tag, decision.title ?? taskLabel(prompt)) }).catch(() => null)

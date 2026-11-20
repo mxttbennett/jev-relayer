@@ -156,3 +156,17 @@ describe('after the relay spawned a subagent', () => {
     expect(out.deny).toBeUndefined()
   })
 })
+
+test('the subagent brief points at the main thread transcript', async () => {
+  // Arrange
+  let brief = ''
+  const env = engine({ model: 'opus', contextTokens: 5_000 }, { model: 'haiku', placement: 'subagent', agent: 'Explore' }, {
+    agent: { spawn: async (e: any) => { brief = e.prompt; return { agentId: 'a1', model: 'claude-haiku' } } },
+    prompt: { submit: async () => undefined },
+  })
+  await startSession(env.$)
+  // Act
+  await handlers.get('prompt.submit')!(env.$, { text: 'find every caller of parse', origin: { kind: 'composer' } }, async (e: unknown) => e)
+  // Assert
+  expect(brief).toMatch(/full transcript, tool results included, is at \S+\.jsonl:/)
+})
